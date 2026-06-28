@@ -4,7 +4,7 @@ from alo.models import ProgressLogEntry, RoadmapItemUpdate, WeaknessEntry
 
 def test_ensure_state_files(tmp_path: Path):
     summary = state_manager.ensure_state_files(tmp_path)
-    assert len(summary.files) == 8
+    assert len(summary.files) == 9
     for f in summary.files:
         assert f.exists is True
         

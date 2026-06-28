@@ -17,6 +17,16 @@ def test_config_path_is_outside_repo(monkeypatch, tmp_path):
     cwd = Path.cwd()
     assert cwd not in config_dir.parents
 
+def test_openai_compatible_requires_base_url():
+    from alo.config import AloConfig
+    import pytest
+    
+    with pytest.raises(ValueError):
+        AloConfig(llm_provider="openai-compatible", base_url=None)
+        
+    cfg = AloConfig(llm_provider="openai-compatible", base_url="http://localhost:8080")
+    assert cfg.base_url == "http://localhost:8080"
+    
 def test_save_and_load_config(monkeypatch, tmp_path):
     home_dir = tmp_path / "home"
     home_dir.mkdir()
@@ -24,12 +34,13 @@ def test_save_and_load_config(monkeypatch, tmp_path):
 
     assert config.config_exists() is False
 
-    test_config = {
-        "llm_provider": "openai",
-        "model": "gpt-4o",
-        "safe_mode": True
-    }
-
+    from alo.config import AloConfig
+    test_config = AloConfig(
+        llm_provider="openai",
+        model="gpt-4o",
+        safe_mode=True
+    )
+    
     config.save_config(test_config)
     assert config.config_exists() is True
 

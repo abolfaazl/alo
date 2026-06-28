@@ -7,14 +7,84 @@ from alo.models import (
     WeaknessEntry, 
     StateFileStatus, 
     StateSummary,
-    OnboardingProfile
+    OnboardingProfile,
+    AssessmentResult
 )
 from alo import markdown_store
 
 REQUIRED_FILES = {
     "README.md": "# ALO Learning Repository\n\nThis is a learning repository managed by ALO (Agentic Learning OS).\n",
-    "learning-profile.md": "# Learning Profile\n\n## Current Level Summary\n\n## Declared Skills\n\n## Assessment Summary\n\n## Goals\n\n## Preferred Learning Style\n\n## Constraints\n\n## Last Updated\n",
-    "skill-map.md": "# Skill Map\n\n## Python\n\n## Git and GitHub\n\n## Testing\n\n## Architecture\n\n## AI-Native Development\n\n## Product Engineering\n\n## Technical Writing\n",
+    "learning-profile.md": """# Learning Profile
+
+## Learning Project
+
+Subject:
+Target Goal:
+Current Level:
+Known Background:
+Preferred Language:
+Started On:
+
+## Current Level Summary
+
+## Declared Knowledge
+
+## Assessment Summary
+
+Not assessed yet.
+
+## Goals
+
+## Learning Goal Mode
+
+## Preferred Learning Style
+
+## Time Commitment
+
+## Constraints
+
+## Privacy Preference
+
+## Last Updated
+""",
+    "skill-map.md": """# Skill Map
+
+## Subject Skill Areas
+
+### Area 1: To be determined
+Level: self-reported / unknown
+Confidence: unverified
+Evidence:
+Status:
+
+## General Learning Skills
+
+### Study Consistency
+Level: unknown
+Confidence: unverified
+Evidence:
+Status:
+
+### Practice and Recall
+Level: unknown
+Confidence: unverified
+Evidence:
+Status:
+
+### Feedback Handling
+Level: unknown
+Confidence: unverified
+Evidence:
+Status:
+
+## Assessment Evidence
+
+Not assessed yet.
+""",
+    "learning-paths.md": """# Learning Paths
+
+## Current Recommendations
+""",
     "roadmap.md": "# Roadmap\n\n## Active Path\n\n## Roadmap Items\n",
     "weaknesses.md": "# Weaknesses\n\n## Active Weaknesses\n",
     "progress-log.md": "# Progress Log\n",
@@ -131,32 +201,39 @@ def has_user_content(file_path: Path, default_template: str) -> bool:
     return content.strip() != default_template.strip()
 
 def build_learning_profile_markdown(profile: OnboardingProfile) -> str:
-    goal_text = profile.specific_goal if profile.specific_goal else "Learning path recommendation needed: yes"
     privacy_text = "May store private details." if profile.privacy_preference.value == "store" else "Private identifiers should be generalized."
     return f"""# Learning Profile
+
+## Learning Project
+
+Subject: {profile.subject}
+Target Goal: {profile.goal}
+Current Level: {profile.experience_level.value}
+Known Background: {profile.background}
+Preferred Language: English
+Started On: {profile.date}
 
 ## Current Level Summary
 {profile.experience_level.value}
 
-## Declared Skills
-{profile.declared_skills}
+## Declared Knowledge
+{profile.background}
 
 ## Assessment Summary
 
-Not assessed yet. Formal assessment will be implemented in Phase 4.
+Not assessed yet.
 
 ## Goals
-{goal_text}
+{profile.goal}
 
 ## Learning Goal Mode
-{profile.goal_mode.value}
+Unknown
 
 ## Preferred Learning Style
-{profile.learning_style.value}
+Unknown
 
 ## Time Commitment
-Time per session: {profile.time_per_session}
-Sessions per week: {profile.sessions_per_week}
+Unknown
 
 ## Constraints
 None
@@ -169,51 +246,40 @@ None
 """
 
 def build_skill_map_markdown(profile: OnboardingProfile) -> str:
-    sk = profile.declared_skills.lower()
-    
-    sections = [
-        "Python",
-        "Git and GitHub",
-        "Testing",
-        "Architecture",
-        "AI-Native Development",
-        "Product Engineering",
-        "Technical Writing"
-    ]
-    
-    mappings = {
-        "python": "Python",
-        "git": "Git and GitHub",
-        "github": "Git and GitHub",
-        "test": "Testing",
-        "pytest": "Testing",
-        "architecture": "Architecture",
-        "design pattern": "Architecture",
-        "ai": "AI-Native Development",
-        "llm": "AI-Native Development",
-        "product": "Product Engineering",
-        "writing": "Technical Writing",
-        "doc": "Technical Writing"
-    }
-    
-    found_sections = set()
-    for kw, section in mappings.items():
-        if kw in sk:
-            found_sections.add(section)
-            
-    content = "# Skill Map\n\n"
-    for sec in sections:
-        content += f"## {sec}\n\n"
-        if sec in found_sections:
-            content += "Level: self-reported / unknown\nConfidence: unverified\nEvidence: Declared in onboarding\nStatus:\n\n"
-        else:
-            content += "Level: self-reported / unknown\nConfidence: unverified\nEvidence:\nStatus:\n\n"
-            
-    if profile.declared_skills:
-        content += "## Other Declared Skills\n\n"
-        content += f"{profile.declared_skills}\n"
-        
-    return content.strip() + "\n"
+    return """# Skill Map
+
+## Subject Skill Areas
+
+### Area 1: To be determined
+Level: self-reported / unknown
+Confidence: unverified
+Evidence: Declared in onboarding
+Status:
+
+## General Learning Skills
+
+### Study Consistency
+Level: unknown
+Confidence: unverified
+Evidence:
+Status:
+
+### Practice and Recall
+Level: unknown
+Confidence: unverified
+Evidence:
+Status:
+
+### Feedback Handling
+Level: unknown
+Confidence: unverified
+Evidence:
+Status:
+
+## Assessment Evidence
+
+Not assessed yet.
+"""
 
 def save_onboarding_profile(repo_path: Path, profile: OnboardingProfile, overwrite: bool = False):
     lp_path = repo_path / "learning-profile.md"
@@ -250,3 +316,342 @@ Next recommendation:
 - Run Phase 4 assessment when available.
 """
     markdown_store.append_text_safely(log_path, content)
+
+def append_assessment_to_learning_profile(repo_path: Path, result: AssessmentResult) -> bool:
+    lp_path = repo_path / "learning-profile.md"
+    content = markdown_store.read_text_safely(lp_path)
+    if not content:
+        return False
+        
+    summary_block = f"""## Assessment Summary
+
+Last Assessment: {result.date}
+Mode: {result.mode.value}
+Score: {result.score_percent}%
+Level: {result.level}
+Summary: Self-report plus assessment indicates {result.level}.
+Strengths: {", ".join(result.strengths) if result.strengths else "None identified"}
+Weaknesses: {", ".join(result.weaknesses) if result.weaknesses else "None identified"}
+Recommendations: {", ".join(result.recommendations)}
+"""
+    
+    import re
+    pattern = re.compile(r"(## Assessment Summary\n.*?)(?=## Goals|#|$)", re.DOTALL)
+    if pattern.search(content):
+        new_content = pattern.sub(summary_block + "\n", content)
+        markdown_store.write_text_safely(lp_path, new_content)
+    return True
+
+def update_skill_map_from_assessment(repo_path: Path, result: AssessmentResult) -> bool:
+    sm_path = repo_path / "skill-map.md"
+    content = markdown_store.read_text_safely(sm_path)
+    if not content:
+        return False
+        
+    lines = content.split('\n')
+    
+    for ds in result.domain_scores:
+        domain_header = f"## {ds.domain}"
+        found_domain = False
+        start_idx = -1
+        
+        for i, line in enumerate(lines):
+            if line.startswith(domain_header):
+                found_domain = True
+                start_idx = i
+                break
+                
+        if found_domain:
+            evidence_block = [
+                "Assessment Evidence:",
+                f"- Last assessed: {result.date}",
+                f"- Score: {ds.score_percent}% ({ds.correct}/{ds.total})",
+                "- Confidence: assessment-based / limited",
+                ""
+            ]
+            
+            existing_ev_start = -1
+            existing_ev_end = -1
+            
+            for j in range(start_idx + 1, len(lines)):
+                if lines[j].startswith("## "):
+                    existing_ev_end = j
+                    break
+                if lines[j].startswith("Assessment Evidence:"):
+                    existing_ev_start = j
+                    
+            if existing_ev_end == -1:
+                existing_ev_end = len(lines)
+                
+            if existing_ev_start != -1:
+                end_block = existing_ev_start + 1
+                while end_block < existing_ev_end and (lines[end_block].startswith("- ") or lines[end_block] == ""):
+                    end_block += 1
+                lines = lines[:existing_ev_start] + evidence_block + lines[end_block:]
+            else:
+                lines = lines[:existing_ev_end] + evidence_block + lines[existing_ev_end:]
+                
+    markdown_store.write_text_safely(sm_path, '\n'.join(lines))
+    return True
+
+def upsert_weaknesses_from_assessment(repo_path: Path, result: AssessmentResult):
+    for i, missed in enumerate(result.missed_questions):
+        wid = f"ALO-WK-AS-{i:03d}"
+        
+        severity = "low"
+        if missed.difficulty in ["advanced", "expert"]:
+            severity = "medium"
+            
+        domain_misses = sum(1 for m in result.missed_questions if m.domain == missed.domain)
+        if domain_misses > 1:
+            severity = "high"
+            
+        weakness = WeaknessEntry(
+            id=wid,
+            topic=missed.weakness_topic,
+            source="Assessment",
+            observed_on=result.date,
+            severity=severity,
+            evidence=f"Missed {missed.difficulty} question in {missed.domain}: {missed.question}",
+            recommended_practice="Review documentation and practice tasks.",
+            status="open"
+        )
+        upsert_weakness(repo_path, weakness)
+
+def save_learning_path_recommendations(repo_path: Path, paths: list):
+    content = "# Learning Paths\n\n## Current Recommendations\n\n"
+    for p in paths:
+        content += f"### {p.id}: {p.title}\n\n"
+        content += f"Summary: {p.summary}\n"
+        content += f"Who it is for: {p.who_it_is_for}\n"
+        content += f"Why it matches: {p.why_it_matches_user}\n"
+        content += f"Expected outcome: {p.expected_outcome}\n"
+        content += f"Core topics: {', '.join(p.core_topics)}\n"
+        content += f"Estimated duration: {p.estimated_duration}\n"
+        content += f"Difficulty: {p.difficulty}\n"
+        content += f"Tradeoffs: {p.tradeoffs}\n"
+        content += f"First step: {p.first_step}\n"
+        content += f"Avoid for now: {p.avoid_for_now}\n"
+        content += f"Confidence: {p.confidence}\n"
+        content += "Status: proposed\n\n"
+        
+    markdown_store.write_text_safely(repo_path / "learning-paths.md", content.strip() + "\n")
+
+def select_learning_path(repo_path: Path, selected_id: str | None):
+    lp_path = repo_path / "learning-paths.md"
+    content = markdown_store.read_text_safely(lp_path)
+    if not content:
+        return None
+        
+    # Mark the selected one as selected, others stay proposed
+    lines = content.split('\n')
+    new_lines = []
+    current_id = None
+    
+    for line in lines:
+        if line.startswith("### "):
+            current_id = line.split(":")[0].replace("### ", "").strip()
+        if line.startswith("Status:"):
+            if current_id == selected_id:
+                new_lines.append("Status: selected")
+            else:
+                # keep as proposed or whatever it was
+                new_lines.append(line)
+        else:
+            new_lines.append(line)
+            
+    markdown_store.write_text_safely(lp_path, "\n".join(new_lines))
+
+def update_active_learning_path(repo_path: Path, selected_path):
+    lp_path = repo_path / "learning-profile.md"
+    content = markdown_store.read_text_safely(lp_path)
+    if not content:
+        return
+    
+    # Simple regex to replace Learning Goal Mode or append Active Path
+    import re
+    if "## Active Learning Path" not in content:
+        content = re.sub(
+            r"## Learning Goal Mode",
+            f"## Active Learning Path\n**Active Learning Path**: {selected_path.id}\nTitle: {selected_path.title}\n\n## Learning Goal Mode",
+            content
+        )
+    else:
+        content = re.sub(
+            r"## Active Learning Path\n.*?\n.*?\n",
+            f"## Active Learning Path\n**Active Learning Path**: {selected_path.id}\nTitle: {selected_path.title}\n",
+            content,
+            flags=re.DOTALL
+        )
+        
+    markdown_store.write_text_safely(lp_path, content)
+
+def _append_to_progress_log(repo_path: Path, title: str, msg: str):
+    from alo import markdown_store
+    log_path = repo_path / "progress-log.md"
+    content = markdown_store.read_text_safely(log_path)
+    from datetime import datetime
+    date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    new_entry = f"## [{date_str}] Session: {title}\n\n{msg}\n\n"
+    
+    if content:
+        content = content.replace("# Progress Log\n", f"# Progress Log\n\n{new_entry}")
+    else:
+        content = f"# Progress Log\n\n{new_entry}"
+        
+    markdown_store.write_text_safely(log_path, content)
+
+def append_paths_progress(repo_path: Path, selected_id: str | None = None):
+    if not selected_id:
+        msg = "- Path recommendations generated but none selected."
+    else:
+        msg = f"- Selected learning path: {selected_id}."
+    _append_to_progress_log(repo_path, "Path Recommendations", msg)
+
+def get_active_learning_path(repo_path: Path) -> dict | None:
+    lp_path = repo_path / "learning-profile.md"
+    content = markdown_store.read_text_safely(lp_path)
+    if not content:
+        return None
+    import re
+    match = re.search(r"\*\*Active Learning Path\*\*: (.+)", content)
+    if not match:
+        return None
+    path_info = match.group(1).strip()
+    return {"id": path_info} # Simplified returning the string identifier
+
+def preserve_existing_roadmap_statuses(existing_text: str, new_roadmap) -> None:
+    import re
+    # Extract statuses from existing text
+    # e.g., "### ALO-RM-001: Title\nStatus: practiced"
+    status_map = {}
+    pattern = r"### (ALO-RM-\d+)[^\n]*\nStatus: ([a-z_]+)"
+    for match in re.finditer(pattern, existing_text):
+        item_id = match.group(1)
+        status = match.group(2)
+        status_map[item_id] = status
+        
+    for item in new_roadmap.items:
+        if item.id in status_map:
+            item.status = status_map[item.id]
+
+def save_roadmap(repo_path: Path, roadmap, active_path_info: str) -> None:
+    rm_path = repo_path / "roadmap.md"
+    
+    # Check if we need to preserve statuses
+    existing_content = markdown_store.read_text_safely(rm_path) or ""
+    preserve_existing_roadmap_statuses(existing_content, roadmap)
+    
+    from datetime import datetime
+    now = datetime.now().strftime("%Y-%m-%d")
+    
+    lines = [
+        "# Roadmap",
+        "",
+        "## Active Path",
+        "",
+        f"Path ID: {active_path_info}",
+        f"Generated On: {now}",
+        "",
+        "## Roadmap Items",
+        ""
+    ]
+    
+    for item in roadmap.items:
+        lines.append(f"### {item.id}: {item.title}")
+        lines.append(f"Status: {item.status}")
+        lines.append(f"Level: {item.level}")
+        lines.append(f"Estimated Time: {item.estimated_time}")
+        lines.append(f"Depends On: {item.depends_on}")
+        lines.append(f"Prerequisites: {item.prerequisites}")
+        lines.append(f"Success Criteria: {item.success_criteria}")
+        lines.append(f"Practice Task: {item.practice_task}")
+        lines.append(f"Assessment Method: {item.assessment_method}")
+        lines.append(f"Resources To Find: {item.resources_to_find}")
+        lines.append(f"Summary: {item.summary}")
+        lines.append("")
+        
+    markdown_store.write_text_safely(rm_path, "\n".join(lines))
+
+def append_roadmap_progress(repo_path: Path):
+    _append_to_progress_log(repo_path, "Roadmap Generation", "- Generated new step-by-step roadmap.")
+
+def append_assessment_progress(repo_path: Path, result: AssessmentResult):
+    log_path = repo_path / "progress-log.md"
+    missed_domains = set(m.domain for m in result.missed_questions)
+    missed_str = "\n".join([f"- {d}" for d in missed_domains]) if missed_domains else "- None"
+    
+    content = f"""\n## {result.date}\n
+### Session: Assessment
+Outcome: not_evaluated
+Score: {result.score_percent}%
+What was learned:
+- Completed 20-question calibration assessment.
+
+Mistakes:
+{missed_str}
+
+Next recommendation:
+- Use results for Phase 5 learning path recommendations.
+"""
+    markdown_store.append_text_safely(log_path, content)
+
+def get_next_learnable_roadmap_item(repo_path: Path) -> str | None:
+    from alo import markdown_store
+    import re
+    rm_path = repo_path / "roadmap.md"
+    content = markdown_store.read_text_safely(rm_path)
+    if not content:
+        return None
+    
+    blocks = re.split(r"(?=### ALO-RM-\d+)", content)
+    
+    for status_target in ["in_progress", "needs_review", "todo"]:
+        for block in blocks:
+            if not block.startswith("### ALO-RM-"):
+                continue
+            match = re.search(r"Status: ([a-z_]+)", block)
+            if match and match.group(1) == status_target:
+                return block.strip()
+    return None
+
+def get_roadmap_item_by_id(repo_path: Path, item_id: str) -> str | None:
+    from alo import markdown_store
+    import re
+    rm_path = repo_path / "roadmap.md"
+    content = markdown_store.read_text_safely(rm_path)
+    if not content:
+        return None
+    blocks = re.split(r"(?=### ALO-RM-\d+)", content)
+    for block in blocks:
+        if block.startswith(f"### {item_id}"):
+            return block.strip()
+    return None
+
+def append_learning_session_progress(repo_path: Path, eval_result, item_id: str, title: str):
+    msg = (
+        f"Outcome: {eval_result.result}\n"
+        f"Score: {eval_result.score}\n"
+        f"What was learned: {title}\n"
+        f"Mistakes: {eval_result.weaknesses}\n"
+        f"Next recommendation: {eval_result.recommended_next_step}"
+    )
+    _append_to_progress_log(repo_path, f"{item_id} — {title}", msg)
+
+def upsert_learning_session_weaknesses(repo_path: Path, eval_result, item_id: str):
+    from datetime import datetime
+    now = datetime.now().strftime("%Y-%m-%d")
+    for idx, w in enumerate(eval_result.weakness_entries):
+        w_id = f"ALO-WK-{item_id}-{idx+1:02d}"
+        entry = WeaknessEntry(
+            id=w_id,
+            topic=w.topic,
+            source="Learning Session",
+            observed_on=now,
+            severity="medium",
+            evidence=w.evidence,
+            recommended_practice=w.recommended_practice,
+            status="active"
+        )
+        upsert_weakness(repo_path, entry)

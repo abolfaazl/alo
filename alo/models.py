@@ -12,35 +12,22 @@ EvaluationOutcome = Literal[
 ]
 
 class ExperienceLevel(str, Enum):
+    absolute_beginner = "Absolute beginner"
     beginner = "Beginner"
-    junior = "Junior"
     intermediate = "Intermediate"
     advanced = "Advanced"
-    professional = "Professional / Senior"
-
-class LearningGoalMode(str, Enum):
-    know = "I know what I want to learn"
-    recommend = "Recommend paths later"
-
-class LearningStyle(str, Enum):
-    short_theory = "Short theory then practice"
-    mostly_practical = "Mostly practical exercises"
-    deep_explanations = "Deep explanations"
-    interview_style = "Interview-style questions"
-    mixed = "Mixed"
+    professional = "Professional"
 
 class PrivacyPreference(str, Enum):
     generalize = "generalize"
     store = "store"
 
 class OnboardingProfile(BaseModel):
-    declared_skills: str
+    subject: str
+    background: str
     experience_level: ExperienceLevel
-    goal_mode: LearningGoalMode
-    specific_goal: Optional[str] = None
-    learning_style: LearningStyle
-    time_per_session: str
-    sessions_per_week: str
+    goal: str
+    assess_now: bool
     privacy_preference: PrivacyPreference
     date: str
 
@@ -75,3 +62,63 @@ class StateSummary(BaseModel):
     repo_path: str
     files: List[StateFileStatus]
 
+class AssessmentDifficulty(str, Enum):
+    foundation = "foundation"
+    intermediate = "intermediate"
+    advanced = "advanced"
+    professional = "professional"
+    expert = "expert"
+
+class AssessmentDomain(str, Enum):
+    python = "Python"
+    git = "Git and GitHub"
+    testing = "Testing"
+    architecture = "Architecture"
+    ai = "AI-Native Development"
+    product = "Product Engineering"
+    writing = "Technical Writing"
+
+class AssessmentMode(str, Enum):
+    local = "local"
+    llm = "llm"
+
+class AssessmentQuestion(BaseModel):
+    id: str
+    domain: str
+    difficulty: str
+    question: str
+    choices: List[str]
+    correct_choice_index: int
+    explanation: str
+    weakness_topic: str
+
+class AssessmentAnswer(BaseModel):
+    question_id: str
+    selected_index: Optional[int]
+    is_correct: bool
+
+class AssessmentDomainScore(BaseModel):
+    domain: str
+    score_percent: int
+    correct: int
+    total: int
+
+class AssessmentDifficultyScore(BaseModel):
+    difficulty: str
+    score_percent: int
+    correct: int
+    total: int
+
+class AssessmentResult(BaseModel):
+    mode: AssessmentMode
+    total_questions: int
+    correct_answers: int
+    score_percent: int
+    level: str
+    domain_scores: List[AssessmentDomainScore]
+    difficulty_scores: List[AssessmentDifficultyScore]
+    missed_questions: List[AssessmentQuestion]
+    strengths: List[str]
+    weaknesses: List[str]
+    recommendations: List[str]
+    date: str
