@@ -1,0 +1,12 @@
+.env
+*.env
+alo_config.json
+.alo/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/

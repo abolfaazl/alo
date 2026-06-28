@@ -1,0 +1,7 @@
+{
+  "llm_provider": null,
+  "model": null,
+  "repo_path": null,
+  "safe_mode": true,
+  "auto_push": false
+}

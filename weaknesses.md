@@ -1,0 +1,3 @@
+# Weaknesses
+
+## Active Weaknesses
