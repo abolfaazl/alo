@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alo"
-version = "0.1.0"
+version = "1.0.0"
 description = "Agentic Learning OS"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,7 +14,10 @@ dependencies = [
     "pydantic>=2.7.0",
     "openai>=1.40.0,<2.0.0",
     "GitPython>=3.1.0",
-    "textual>=0.70.0"
+    "textual>=0.70.0",
+    "arabic-reshaper>=3.0.0",
+    "python-bidi>=0.4.2",
+    "keyring>=24.0.0"
 ]
 
 [project.optional-dependencies]
@@ -25,6 +28,13 @@ dev = [
 
 [project.scripts]
 alo = "alo.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["alo*"]
+
+[tool.setuptools.package-data]
+alo = ["**/*.css"]
 
 [tool.ruff]
 line-length = 88

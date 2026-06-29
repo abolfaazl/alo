@@ -72,3 +72,23 @@ class LearningEvaluation(BaseModel):
     recommended_next_step: str
     roadmap_status_update: Literal["practiced", "passed_once", "needs_review"]
     weakness_entries: List[WeaknessEntrySchema]
+
+class ReviewSession(BaseModel):
+    target_id: str
+    target_type: Literal["weakness", "roadmap_item"]
+    topic: str
+    short_review: str
+    why_this_matters: str
+    common_mistake: str
+    review_question: str
+    expected_answer_guidance: str
+
+class ReviewEvaluation(BaseModel):
+    result: Literal["pass", "partial", "fail"]
+    score: int
+    feedback: str
+    strengths: str
+    remaining_gaps: str
+    recommended_next_step: str
+    weakness_status_update: Literal["active", "improving", "resolved"]
+    roadmap_status_update: Literal["practiced", "passed_once", "needs_review"]

@@ -39,17 +39,49 @@ Screen {
     background: transparent;
 }
 
+#chat-input-wrapper {
+    height: auto;
+    margin-top: 1;
+}
+
+#state-bar {
+    height: 1;
+    margin-bottom: 0;
+}
+
+#state-label {
+    color: #00D7AF;
+    text-style: bold;
+    padding-right: 2;
+}
+
+#prompt-label {
+    color: #a3a3a3;
+}
+
 #chat-input-container {
-    height: 3;
+    height: auto;
+    min-height: 3;
     background: #1a1a1a;
     border-left: thick #00D7AF;
-    margin-top: 1;
 }
 
 #chat-input {
     background: transparent;
     border: none;
     width: 100%;
+}
+
+#chat-textarea {
+    background: transparent;
+    border: none;
+    width: 100%;
+    height: 10;
+}
+
+#loading-indicator {
+    height: 3;
+    color: #00D7AF;
 }
 
 #sidebar {
@@ -83,4 +115,28 @@ Screen {
     dock: bottom;
     height: 3;
     margin-bottom: 1;
+}
+
+.hidden {
+    display: none;
+}
+
+#choice-container {
+    height: auto;
+    max-height: 10;
+    margin-bottom: 1;
+    background: #1a1a1a;
+    border: solid #00D7AF;
+}
+
+.choice-prompt-label {
+    padding: 0 1;
+    text-style: bold;
+    color: #ffffff;
+}
+
+#choice-option-list {
+    background: transparent;
+    border: none;
+    height: auto;
 }

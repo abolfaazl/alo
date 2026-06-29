@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from alo.exceptions import MissingAPIKeyError, KeyringUnavailableError
 from alo import markdown_store, config as alo_config
 from alo.llm.client import (
     generate_learning_session, generate_mock_learning_session,
@@ -24,6 +25,7 @@ class LearnSessionContext:
 @dataclass
 class LearnGenerateResult:
     success: bool
+    error_code: str = None
     context: Optional[LearnSessionContext] = None
     error: str = None
     warning: str = None
@@ -31,6 +33,7 @@ class LearnGenerateResult:
 @dataclass
 class LearnEvaluateResult:
     success: bool
+    error_code: str = None
     evaluation: any = None
     error: str = None
 
@@ -43,8 +46,12 @@ def generate_session(repo_path: Path, mock: bool = False, item_id: str = None) -
     if not existing_roadmap or "### ALO-RM-" not in existing_roadmap:
         return LearnGenerateResult(success=False, error="No learnable roadmap item found.\nRun `alo roadmap` or review completed items.")
         
-    if not mock and not alo_config.config_exists():
-        return LearnGenerateResult(success=False, error="ALO needs LLM configuration to run a personalized learning session.\nRun: alo config")
+    if not mock:
+        cfg = alo_config.load_config()
+        readiness = alo_config.validate_config_readiness(cfg)
+        if not readiness.llm_ready:
+            missing = ", ".join([i.label for i in readiness.missing_required])
+            return LearnGenerateResult(success=False, error_code="missing_config", error=f"ALO needs LLM configuration. Missing: {missing}")
 
     if item_id:
         target_item = get_roadmap_item_by_id(repo_path, item_id)
@@ -75,11 +82,12 @@ def generate_session(repo_path: Path, mock: bool = False, item_id: str = None) -
             session = generate_learning_session(context_str, target_item)
             if not session:
                 return LearnGenerateResult(success=False, error="Failed to generate learning session.")
-        except ValueError as e:
-            err_msg = str(e)
-            if "not set" in err_msg.lower() or "missing" in err_msg.lower():
-                err_msg = "Configured API key environment variable is missing.\nSet the configured environment variable or update alo config."
-            return LearnGenerateResult(success=False, error=err_msg)
+        except MissingAPIKeyError as e:
+            return LearnGenerateResult(success=False, error_code="missing_api_key", error=str(e))
+        except KeyringUnavailableError as e:
+            return LearnGenerateResult(success=False, error_code="keyring_unavailable", error=str(e))
+        except Exception as e:
+            return LearnGenerateResult(success=False, error_code="llm_error", error=f"LLM or processing error: {e}")
 
     return LearnGenerateResult(
         success=True,
@@ -101,8 +109,12 @@ def evaluate_answer(repo_path: Path, context: LearnSessionContext, answer: str, 
             )
             if not evaluation:
                 return LearnEvaluateResult(success=False, error="Failed to evaluate answer.")
-        except ValueError as e:
-            return LearnEvaluateResult(success=False, error=str(e))
+        except MissingAPIKeyError as e:
+            return LearnGenerateResult(success=False, error_code="missing_api_key", error=str(e))
+        except KeyringUnavailableError as e:
+            return LearnGenerateResult(success=False, error_code="keyring_unavailable", error=str(e))
+        except Exception as e:
+            return LearnGenerateResult(success=False, error_code="llm_error", error=f"LLM or processing error: {e}")
 
     if not dry_run:
         update_roadmap_item_status(repo_path, RoadmapItemUpdate(id=context.target_id, status=evaluation.roadmap_status_update))

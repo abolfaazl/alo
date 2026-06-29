@@ -86,3 +86,53 @@ CRITICAL INSTRUCTIONS:
 5. Only add weakness_entries if the answer reveals a real, actionable knowledge gap.
 6. Use the provided JSON schema. Ensure output is strict JSON with no markdown wrapping.
 """
+
+REVIEW_PROMPT = """You are an expert tutor.
+Review the following context about the user's learning workspace:
+{context}
+
+Target for Review:
+ID: {target_id}
+Type: {target_type}
+Content: {target_content}
+
+Generate a short, targeted review session focusing on this specific weak area or topic.
+CRITICAL INSTRUCTIONS:
+1. The review must focus strictly on the target content, directly addressing misunderstandings, mistakes, or gaps.
+2. Ensure the lesson size is approximately 200 to 500 words.
+3. Be practical, concise, and subject-specific.
+4. Use the provided JSON schema. Ensure output is strict JSON with no markdown wrapping.
+5. Provide a review_question to test their understanding of the review lesson.
+"""
+
+REVIEW_EVALUATION_PROMPT = """You are an expert tutor evaluating a user's answer to a review question.
+Context:
+{context}
+
+Review Target:
+ID: {target_id}
+Type: {target_type}
+Content: {target_content}
+
+Review Lesson Provided:
+{lesson_content}
+
+Review Question:
+{question}
+
+User's Answer:
+{user_answer}
+
+Evaluate the user's answer and score it (pass, partial, fail).
+CRITICAL INSTRUCTIONS:
+1. If the target is a roadmap_item:
+   - 'pass' may update status to 'passed_once'.
+   - 'partial' may update status to 'practiced' or 'needs_review'.
+   - 'fail' should update status to 'needs_review'.
+2. If the target is a weakness:
+   - 'pass' may update status to 'resolved' or 'improving'.
+   - 'partial' may update status to 'improving' or 'active'.
+   - 'fail' should keep status 'active'.
+3. Do not mark anything as 'mastered'.
+4. Use the provided JSON schema. Ensure output is strict JSON with no markdown wrapping.
+"""

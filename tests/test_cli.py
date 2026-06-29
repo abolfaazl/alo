@@ -1,6 +1,14 @@
 import pytest
+import os
+from unittest.mock import patch
 from typer.testing import CliRunner
 from alo.cli import app
+
+# Mock keyring globally to ensure consistent test environment
+@pytest.fixture(autouse=True)
+def mock_keyring():
+    with patch("keyring.get_password", return_value=None):
+        yield
 
 runner = CliRunner()
 
@@ -73,7 +81,7 @@ def test_assess_missing_env_var(tmp_path, monkeypatch):
     
     result = runner.invoke(app, ["assess"])
     assert result.exit_code == 1
-    assert "environment variable is missing" in result.stdout
+    assert "Missing: API Key" in result.stdout
 
 def test_assess_real_openai_mocked(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -279,7 +287,7 @@ def test_paths_missing_env_var(tmp_path, monkeypatch):
     
     result = runner.invoke(app, ["paths"])
     assert result.exit_code == 1
-    assert "environment variable is missing" in result.stdout
+    assert "Missing: API Key" in result.stdout
 
 def test_paths_mock_dry_run(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -429,7 +437,7 @@ def test_roadmap_missing_env_var(tmp_path, monkeypatch):
     
     result = runner.invoke(app, ["roadmap"])
     assert result.exit_code == 1
-    assert "environment variable is missing" in result.stdout
+    assert "Missing: API Key" in result.stdout
 
 def test_roadmap_mock_dry_run(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -619,7 +627,7 @@ def test_learn_missing_env_var(tmp_path, monkeypatch):
     
     result = runner.invoke(app, ["learn"])
     assert result.exit_code == 1
-    assert "environment variable is missing" in result.stdout
+    assert "Missing: API Key" in result.stdout
 
 def test_learn_mock_dry_run(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -748,7 +756,6 @@ async def test_dashboard_interactive_commands(tmp_path):
     from textual.widgets import Input
     
     # Initialize workspace
-    import os
     from alo.cli import app as cli_app
     from typer.testing import CliRunner
     runner = CliRunner()
@@ -786,11 +793,60 @@ async def test_dashboard_interactive_commands(tmp_path):
         await pilot.pause(0.1)
         assert app.screen.app_state == "paths_selecting"
         
-        # select path
+        # select path via text fallback
         inp.value = "1"
         await pilot.press("enter")
         await pilot.pause(0.1)
         assert app.screen.app_state == "idle"
+        
+        # test paths arrow selection
+        inp.value = "paths --mock"
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "paths_selecting"
+        
+        # press down and enter (selects option 2)
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "idle"
+        
+        # test config flow inline
+        inp.value = "settings"
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "settings_menu"
+        
+        # choose LLM provider (Edit LLM Provider is item 2)
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "settings_edit_provider"
+        
+        # provider (ChoicePrompt, selects first)
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "settings_menu"
+        
+        # now choose model
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "settings_edit_model"
+        
+        # enter model
+        inp.value = "gpt-4o"
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "settings_menu"
+        
+        # exit settings menu
+        await pilot.press("escape")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "idle"
+        
+
         
         # test roadmap --mock --force --yes
         inp.value = "roadmap --mock --force --yes"
@@ -805,8 +861,10 @@ async def test_dashboard_interactive_commands(tmp_path):
         assert app.screen.app_state == "learn_answering"
         
         # answer learn
-        inp.value = "This is my answer."
-        await pilot.press("enter")
+        from textual.widgets import TextArea
+        tarea = app.query_one("#chat-textarea", TextArea)
+        tarea.text = "This is my answer."
+        await pilot.press("f9")
         await pilot.pause(0.1)
         assert app.screen.app_state == "idle"
         
@@ -844,11 +902,28 @@ async def test_dashboard_interactive_commands(tmp_path):
         await pilot.pause(0.1)
         assert app.screen.app_state == "idle"
         
-        # review Phase 8 placeholder
-        inp.value = "review"
+        # review Phase 8 real flow
+        inp.value = "review --mock"
         await pilot.press("enter")
         await pilot.pause(0.1)
-        assert app.is_running
+        # Because we have no weakness or review target in the roadmap, it will just show an error text.
+        # Let's add a weakness first to test the full flow.
+        app.screen.app_state = "idle"
+        
+        # Manually add a weakness to the mock workspace to trigger review flow
+        wk_path = tmp_path / "weaknesses.md"
+        wk_path.write_text("# Weaknesses\n### ALO-WK-1: Test\nStatus: active\n", encoding="utf-8")
+        
+        inp.value = "review --mock"
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "review_answering"
+        
+        # answer review
+        tarea.text = "mock answer"
+        await pilot.press("f9")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "idle"
         
         # test quit
         inp.value = "quit"
@@ -856,3 +931,218 @@ async def test_dashboard_interactive_commands(tmp_path):
         
     os.chdir(cwd)
 
+def test_review_no_workspace(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["review"])
+    assert result.exit_code == 1
+    assert "Not an ALO workspace" in result.stdout
+
+def test_review_no_targets(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    inputs = "Subject\nBg\n1\nGoal\nn\nn\nn\n"
+    runner.invoke(app, ["init"], input=inputs)
+    result = runner.invoke(app, ["review"])
+    assert result.exit_code == 1
+    assert "No review target found" in result.stdout
+
+def test_review_priority_weakness(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    inputs = "English\nBg\n1\nGoal\nn\nn\nn\n"
+    runner.invoke(app, ["init"], input=inputs)
+    runner.invoke(app, ["paths", "--mock"], input="1\n")
+    runner.invoke(app, ["roadmap", "--mock"])
+    
+    wk_path = tmp_path / "weaknesses.md"
+    wk = wk_path.read_text(encoding="utf-8")
+    wk += "\n### ALO-WK-001: Test Weakness\nStatus: active\n"
+    wk_path.write_text(wk, encoding="utf-8")
+    
+    result = runner.invoke(app, ["review", "--mock", "--dry-run"], input="answer\n")
+    assert result.exit_code == 0
+    assert "ALO-WK-001" in result.stdout
+
+def test_review_explicit_weakness_and_item(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    inputs = "English\nBg\n1\nGoal\nn\nn\nn\n"
+    runner.invoke(app, ["init"], input=inputs)
+    
+    result = runner.invoke(app, ["review", "--weakness", "1", "--item", "2"])
+    assert result.exit_code == 1
+    assert "Cannot pass both" in result.stdout
+
+def test_review_explicit_weakness_not_found(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    inputs = "English\nBg\n1\nGoal\nn\nn\nn\n"
+    runner.invoke(app, ["init"], input=inputs)
+    
+    result = runner.invoke(app, ["review", "--weakness", "WK-999"])
+    assert result.exit_code == 1
+    assert "not found" in result.stdout
+
+def test_review_explicit_item_not_found(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    inputs = "English\nBg\n1\nGoal\nn\nn\nn\n"
+    runner.invoke(app, ["init"], input=inputs)
+    
+    result = runner.invoke(app, ["review", "--item", "RM-999"])
+    assert result.exit_code == 1
+    assert "not found" in result.stdout
+
+def test_review_no_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    inputs = "English\nBg\n1\nGoal\nn\nn\nn\n"
+    runner.invoke(app, ["init"], input=inputs)
+    
+    wk_path = tmp_path / "weaknesses.md"
+    wk_path.write_text("# Weaknesses\n### ALO-WK-1: Test\nStatus: active\n", encoding="utf-8")
+    
+    from alo.config import get_config_path
+    if get_config_path().exists():
+        get_config_path().unlink()
+        
+    result = runner.invoke(app, ["review"])
+    assert result.exit_code == 1
+    assert "needs LLM configuration" in result.stdout
+
+def test_review_mock_dry_run(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    inputs = "English\nBg\n1\nGoal\nn\nn\nn\n"
+    runner.invoke(app, ["init"], input=inputs)
+    
+    wk_path = tmp_path / "weaknesses.md"
+    wk_path.write_text("# Weaknesses\n### ALO-WK-1: Test\nStatus: active\n", encoding="utf-8")
+    
+    result = runner.invoke(app, ["review", "--mock", "--dry-run"], input="fail\n")
+    assert result.exit_code == 0
+    assert "State not updated (dry run)" in result.stdout
+
+def test_review_mock_pass(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    inputs = "English\nBg\n1\nGoal\nn\nn\nn\n"
+    runner.invoke(app, ["init"], input=inputs)
+    
+    wk_path = tmp_path / "weaknesses.md"
+    wk_path.write_text("# Weaknesses\n### ALO-WK-1: Test\nStatus: active\n", encoding="utf-8")
+    
+    result = runner.invoke(app, ["review", "--mock"], input="pass answer\n")
+    assert result.exit_code == 0
+    assert "State updated successfully" in result.stdout
+    
+    wk = wk_path.read_text(encoding="utf-8")
+    assert "Status: resolved" in wk
+    assert "Review Result: pass" in wk
+
+def test_review_mock_roadmap_item(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    inputs = "English\nBg\n1\nGoal\nn\nn\nn\n"
+    runner.invoke(app, ["init"], input=inputs)
+    runner.invoke(app, ["paths", "--mock"], input="1\n")
+    runner.invoke(app, ["roadmap", "--mock"])
+    
+    rm_path = tmp_path / "roadmap.md"
+    rm = rm_path.read_text(encoding="utf-8")
+    rm = rm.replace("### ALO-RM-001: Mock English Item 1\nStatus: todo", "### ALO-RM-001: Mock English Item 1\nStatus: needs_review")
+    rm_path.write_text(rm, encoding="utf-8")
+    
+    result = runner.invoke(app, ["review", "--mock"], input="pass answer\n")
+    assert result.exit_code == 0
+    assert "State updated successfully" in result.stdout
+    
+    rm = rm_path.read_text(encoding="utf-8")
+    assert "### ALO-RM-001: Mock English Item 1\nStatus: passed_once" in rm
+
+@pytest.mark.anyio
+async def test_dashboard_init(tmp_path, monkeypatch):
+    from alo.ui.dashboard import AloApp
+    from textual.widgets import Input
+    
+    monkeypatch.chdir(tmp_path)
+    
+    app = AloApp(is_workspace=False, workspace_info={})
+    
+    async with app.run_test() as pilot:
+        for _ in range(10):
+            if app.query("#logo"):
+                break
+            await pilot.pause(0.1)
+            
+        inp = app.query_one("#chat-input", Input)
+        
+        # start init flow
+        inp.value = "init"
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "init_subject"
+        
+        inp.value = "English grammar"
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "init_background"
+        
+        from textual.widgets import TextArea
+        tarea = app.query_one("#chat-textarea", TextArea)
+        
+        tarea.text = "I know basic English words"
+        await pilot.press("f9")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "init_level"
+        
+        # choose intermediate (2)
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "init_goal"
+        
+        tarea.text = "I want to write correct English sentences"
+        await pilot.press("f9")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "init_assess_choice"
+        
+        # assess_now: no
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "init_privacy_choice"
+        
+        # privacy: no
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "init_git_choice"
+        
+        # init git: yes
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "init_remote_choice"
+        
+        # connect remote: no
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "guided_start_paths"
+
+        # generate learning paths: no
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        
+        assert app.screen.app_state == "idle"
+        
+        # verify
+        lp = (tmp_path / "learning-profile.md").read_text(encoding="utf-8")
+        assert "Subject: English grammar" in lp
+        assert "Background: I know basic English words" in lp
+        assert "Goal: I want to write correct English sentences" in lp
+        
+        # Git was initialized
+        assert (tmp_path / ".git").exists()
+        
+        # Esc cancels gracefully
+        inp.value = "init"
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "init_overwrite_choice"
+        
+        await pilot.press("escape")
+        await pilot.pause(0.1)
+        assert app.screen.app_state == "idle"

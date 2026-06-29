@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from alo.exceptions import MissingAPIKeyError, KeyringUnavailableError
 from alo import markdown_store, config as alo_config
 from alo.llm.client import generate_roadmap, generate_mock_roadmap
 from alo.state_manager import get_active_learning_path, save_roadmap, append_roadmap_progress
@@ -8,6 +9,7 @@ from alo.state_manager import get_active_learning_path, save_roadmap, append_roa
 @dataclass
 class RoadmapServiceResult:
     success: bool
+    error_code: str = None
     items: list = None
     active_path_id: str = None
     error: str = None
@@ -28,8 +30,12 @@ def generate_roadmap_service(repo_path: Path, mock: bool = False, force: bool = 
     if has_items and not force:
         return RoadmapServiceResult(success=False, error="A roadmap already exists.\nRun `alo roadmap --force` to regenerate it (existing statuses will be preserved).")
         
-    if not mock and not alo_config.config_exists():
-        return RoadmapServiceResult(success=False, error="ALO needs LLM configuration to generate a personalized roadmap.\nRun: alo config")
+    if not mock:
+        cfg = alo_config.load_config()
+        readiness = alo_config.validate_config_readiness(cfg)
+        if not readiness.llm_ready:
+            missing = ", ".join([i.label for i in readiness.missing_required])
+            return RoadmapServiceResult(success=False, error_code="missing_config", error=f"ALO needs LLM configuration. Missing: {missing}")
 
     lp = markdown_store.read_text_safely(repo_path / "learning-profile.md") or ""
     sm = markdown_store.read_text_safely(repo_path / "skill-map.md") or ""
@@ -51,11 +57,12 @@ def generate_roadmap_service(repo_path: Path, mock: bool = False, force: bool = 
             llm_response = generate_roadmap(context)
             if not llm_response:
                 return RoadmapServiceResult(success=False, error="Failed to generate roadmap.")
-        except ValueError as e:
-            err_msg = str(e)
-            if "not set" in err_msg.lower() or "missing" in err_msg.lower():
-                err_msg = "Configured API key environment variable is missing.\nSet the configured environment variable or update alo config."
-            return RoadmapServiceResult(success=False, error=err_msg)
+        except MissingAPIKeyError as e:
+            return RoadmapServiceResult(success=False, error_code="missing_api_key", error=str(e))
+        except KeyringUnavailableError as e:
+            return RoadmapServiceResult(success=False, error_code="keyring_unavailable", error=str(e))
+        except Exception as e:
+            return RoadmapServiceResult(success=False, error_code="llm_error", error=f"LLM or processing error: {e}")
             
     if not llm_response or not hasattr(llm_response, "items"):
         return RoadmapServiceResult(success=False, error="LLM failed to return a valid roadmap.")

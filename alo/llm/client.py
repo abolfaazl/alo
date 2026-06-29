@@ -1,18 +1,25 @@
-import os
 from alo.config import load_config
-from alo.llm.schemas import AssessmentResponse, GeneratedAssessmentQuestion, LearningPath, LearningPathsResponse, RoadmapItem, RoadmapResponse, LearningSession, LearningEvaluation
+from alo.llm.schemas import AssessmentResponse, GeneratedAssessmentQuestion, LearningPath, LearningPathsResponse, RoadmapItem, RoadmapResponse, LearningSession, LearningEvaluation, ReviewSession, ReviewEvaluation
 
-def generate_assessment(subject: str, goal: str, level: str, background: str) -> AssessmentResponse | None:
-    cfg = load_config()
-    
+from alo.config import resolve_api_key
+
+def _get_llm_client(cfg):
     if cfg.llm_provider not in ["openai", "openai-compatible"]:
         raise ValueError("Only openai and openai-compatible providers are implemented.")
         
-    api_key = os.environ.get(cfg.api_key_env_var)
-    if not api_key:
-        raise ValueError("Configured API key environment variable is missing.")
+    api_key = resolve_api_key(cfg)
 
     import openai
+    client_kwargs = {"api_key": api_key}
+    if cfg.base_url:
+        client_kwargs["base_url"] = cfg.base_url
+        
+    return openai.OpenAI(**client_kwargs)
+
+def generate_assessment(subject: str, goal: str, level: str, background: str) -> AssessmentResponse | None:
+    cfg = load_config()
+    client = _get_llm_client(cfg)
+
     from alo.llm.prompts import ASSESSMENT_PROMPT
     
     prompt = ASSESSMENT_PROMPT.format(
@@ -21,12 +28,6 @@ def generate_assessment(subject: str, goal: str, level: str, background: str) ->
         level=level,
         background=background
     )
-
-    client_kwargs = {"api_key": api_key}
-    if cfg.base_url:
-        client_kwargs["base_url"] = cfg.base_url
-        
-    client = openai.OpenAI(**client_kwargs)
     
     try:
         response = client.beta.chat.completions.parse(
@@ -78,24 +79,11 @@ def generate_mock_assessment(subject: str) -> AssessmentResponse:
 
 def generate_paths(context: str) -> LearningPathsResponse | None:
     cfg = load_config()
-    
-    if cfg.llm_provider not in ["openai", "openai-compatible"]:
-        raise ValueError("Only openai and openai-compatible providers are implemented.")
-        
-    api_key = os.environ.get(cfg.api_key_env_var)
-    if not api_key:
-        raise ValueError("Configured API key environment variable is missing.")
+    client = _get_llm_client(cfg)
 
-    import openai
     from alo.llm.prompts import PATHS_PROMPT
     
     prompt = PATHS_PROMPT.format(context=context)
-
-    client_kwargs = {"api_key": api_key}
-    if cfg.base_url:
-        client_kwargs["base_url"] = cfg.base_url
-        
-    client = openai.OpenAI(**client_kwargs)
     
     try:
         response = client.beta.chat.completions.parse(
@@ -144,24 +132,11 @@ def generate_mock_paths(subject: str) -> LearningPathsResponse:
 
 def generate_roadmap(context: str) -> RoadmapResponse | None:
     cfg = load_config()
-    
-    if cfg.llm_provider not in ["openai", "openai-compatible"]:
-        raise ValueError("Only openai and openai-compatible providers are implemented.")
-        
-    api_key = os.environ.get(cfg.api_key_env_var)
-    if not api_key:
-        raise ValueError("Configured API key environment variable is missing.")
+    client = _get_llm_client(cfg)
 
-    import openai
     from alo.llm.prompts import ROADMAP_PROMPT
     
     prompt = ROADMAP_PROMPT.format(context=context)
-
-    client_kwargs = {"api_key": api_key}
-    if cfg.base_url:
-        client_kwargs["base_url"] = cfg.base_url
-        
-    client = openai.OpenAI(**client_kwargs)
     
     try:
         response = client.beta.chat.completions.parse(
@@ -209,24 +184,11 @@ def generate_mock_roadmap(subject: str) -> RoadmapResponse:
 
 def generate_learning_session(context: str, item_content: str) -> LearningSession | None:
     cfg = load_config()
-    
-    if cfg.llm_provider not in ["openai", "openai-compatible"]:
-        raise ValueError("Only openai and openai-compatible providers are implemented.")
-        
-    api_key = os.environ.get(cfg.api_key_env_var)
-    if not api_key:
-        raise ValueError("Configured API key environment variable is missing.")
+    client = _get_llm_client(cfg)
 
-    import openai
     from alo.llm.prompts import SESSION_PROMPT
     
     prompt = SESSION_PROMPT.format(context=context, item_content=item_content)
-
-    client_kwargs = {"api_key": api_key}
-    if cfg.base_url:
-        client_kwargs["base_url"] = cfg.base_url
-        
-    client = openai.OpenAI(**client_kwargs)
     
     try:
         response = client.beta.chat.completions.parse(
@@ -251,15 +213,8 @@ def generate_learning_session(context: str, item_content: str) -> LearningSessio
 
 def evaluate_learning_session(context: str, item_content: str, lesson_content: str, question: str, user_answer: str) -> LearningEvaluation | None:
     cfg = load_config()
-    
-    if cfg.llm_provider not in ["openai", "openai-compatible"]:
-        raise ValueError("Only openai and openai-compatible providers are implemented.")
-        
-    api_key = os.environ.get(cfg.api_key_env_var)
-    if not api_key:
-        raise ValueError("Configured API key environment variable is missing.")
+    client = _get_llm_client(cfg)
 
-    import openai
     from alo.llm.prompts import EVALUATION_PROMPT
     
     prompt = EVALUATION_PROMPT.format(
@@ -269,12 +224,6 @@ def evaluate_learning_session(context: str, item_content: str, lesson_content: s
         question=question,
         user_answer=user_answer
     )
-
-    client_kwargs = {"api_key": api_key}
-    if cfg.base_url:
-        client_kwargs["base_url"] = cfg.base_url
-        
-    client = openai.OpenAI(**client_kwargs)
     
     try:
         response = client.beta.chat.completions.parse(
@@ -336,4 +285,110 @@ def evaluate_mock_learning_session(user_answer: str) -> LearningEvaluation:
         recommended_next_step="Move to next item.",
         roadmap_status_update="passed_once",
         weakness_entries=[]
+    )
+
+def generate_review_session(context: str, target_id: str, target_type: str, target_content: str) -> ReviewSession | None:
+    cfg = load_config()
+    client = _get_llm_client(cfg)
+
+    from alo.llm.prompts import REVIEW_PROMPT
+    
+    prompt = REVIEW_PROMPT.format(
+        context=context, 
+        target_id=target_id,
+        target_type=target_type,
+        target_content=target_content
+    )
+    
+    try:
+        response = client.beta.chat.completions.parse(
+            model=cfg.model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format=ReviewSession,
+            temperature=0.7
+        )
+        return response.choices[0].message.parsed
+    except Exception:
+        try:
+            response = client.chat.completions.create(
+                model=cfg.model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.7
+            )
+            content = response.choices[0].message.content
+            return ReviewSession.model_validate_json(content)
+        except Exception as fallback_e:
+            raise ValueError(f"Failed to generate valid JSON review session. Error: {fallback_e}")
+
+def evaluate_review_session(context: str, target_id: str, target_type: str, target_content: str, lesson_content: str, question: str, user_answer: str) -> ReviewEvaluation | None:
+    cfg = load_config()
+    client = _get_llm_client(cfg)
+
+    from alo.llm.prompts import REVIEW_EVALUATION_PROMPT
+    
+    prompt = REVIEW_EVALUATION_PROMPT.format(
+        context=context, 
+        target_id=target_id,
+        target_type=target_type,
+        target_content=target_content,
+        lesson_content=lesson_content,
+        question=question,
+        user_answer=user_answer
+    )
+    
+    try:
+        response = client.beta.chat.completions.parse(
+            model=cfg.model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format=ReviewEvaluation,
+            temperature=0.7
+        )
+        return response.choices[0].message.parsed
+    except Exception:
+        try:
+            response = client.chat.completions.create(
+                model=cfg.model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.7
+            )
+            content = response.choices[0].message.content
+            return ReviewEvaluation.model_validate_json(content)
+        except Exception as fallback_e:
+            raise ValueError(f"Failed to generate valid JSON review evaluation. Error: {fallback_e}")
+
+def generate_mock_review_session(target_id: str, target_type: str, topic: str) -> ReviewSession:
+    return ReviewSession(
+        target_id=target_id,
+        target_type=target_type,
+        topic=topic,
+        short_review=f"This is a mock review lesson for {target_id} about {topic}.",
+        why_this_matters=f"Mock explanation for why {topic} matters.",
+        common_mistake="Mock mistake.",
+        review_question="What is the mock answer?",
+        expected_answer_guidance="Expect 'mock answer'."
+    )
+
+def evaluate_mock_review_session(user_answer: str, target_type: str) -> ReviewEvaluation:
+    if "fail" in user_answer.lower():
+        return ReviewEvaluation(
+            result="fail",
+            score=30,
+            feedback="Mock failure feedback.",
+            strengths="Mock strengths.",
+            remaining_gaps="Mock remaining gaps.",
+            recommended_next_step="Try again.",
+            weakness_status_update="active",
+            roadmap_status_update="needs_review"
+        )
+    return ReviewEvaluation(
+        result="pass",
+        score=90,
+        feedback="Mock pass feedback.",
+        strengths="Mock strengths.",
+        remaining_gaps="None.",
+        recommended_next_step="Move on to next topic.",
+        weakness_status_update="resolved" if target_type == "weakness" else "active",
+        roadmap_status_update="passed_once" if target_type == "roadmap_item" else "practiced"
     )

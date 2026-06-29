@@ -1,6 +1,5 @@
 import sys
 import shutil
-import os
 from pathlib import Path
 from rich.table import Table
 from rich.panel import Panel
@@ -8,6 +7,12 @@ from rich.console import Group
 from rich.text import Text
 
 from alo import state_manager, config as alo_config
+
+def truncate_middle(text: str, max_length: int = 40) -> str:
+    if len(text) <= max_length:
+        return text
+    half = (max_length - 3) // 2
+    return f"{text[:half]}...{text[-half:]}"
 
 def build_status_view(cwd: Path) -> Group:
     summary = state_manager.get_state_summary(cwd)
@@ -69,16 +74,19 @@ def build_doctor_view(cwd: Path) -> Group:
         repo_path = "GitPython not installed"
 
     table.add_row("Inside Git Repo", "[green]Yes[/green]" if is_git_repo else "[yellow]No[/yellow]", repo_path)
-
-    config_path = alo_config.get_config_path()
-    config_exists = alo_config.config_exists()
-    table.add_row("Local Config", "[green]Exists[/green]" if config_exists else "[yellow]Missing[/yellow]", str(config_path))
-
-    openai_key = "OPENAI_API_KEY" in os.environ
-    anthropic_key = "ANTHROPIC_API_KEY" in os.environ
-    keys_status = "[green]Found[/green]" if openai_key or anthropic_key else "[yellow]None[/yellow]"
-    keys_details = "OPENAI_API_KEY: " + ("Yes" if openai_key else "No") + ", ANTHROPIC_API_KEY: " + ("Yes" if anthropic_key else "No")
-    table.add_row("Env Variables", keys_status, keys_details)
+    
+    cfg = alo_config.load_config()
+    readiness = alo_config.validate_config_readiness(cfg)
+    
+    ready_status = "[green]Ready[/green]" if readiness.llm_ready else "[red]Not ready[/red]"
+    
+    missing_str = ", ".join([i.label for i in readiness.missing_required])
+    if missing_str:
+        details = f"Missing: {missing_str}"
+    else:
+        details = "All required fields configured"
+        
+    table.add_row("LLM Readiness", ready_status, details)
 
     try:
         import alo  # noqa: F401
@@ -91,8 +99,25 @@ def build_doctor_view(cwd: Path) -> Group:
         Panel("[bold cyan]ALO Doctor[/bold cyan] - Checking environment health..."),
         table
     ]
-    if not config_exists:
-        renderables.append(Text.from_markup("[yellow]Warning: Local ALO config does not exist. Run 'alo init' or create it manually.[/yellow]"))
+    
+    # Actionable Next Steps
+    next_steps = []
+    
+    from alo.services.init_service import detect_init_state
+    init_state = detect_init_state(cwd, allow_source_repo=False)
+    
+    if init_state == "source_repo":
+        next_steps.append("[red]This is the ALO development repository.[/red] [bold]Next step:[/bold] Create a separate learning workspace and run `alo init`.")
+    elif not git_path:
+        next_steps.append("[yellow]Git is not available.[/yellow] Sync will not work until Git is installed.")
+    elif not readiness.llm_ready:
+        next_steps.append("[bold]Next step:[/bold] Run `alo config` or open the dashboard and type `config`.")
+    elif not alo_config.config_exists():
+        next_steps.append("[bold]Next step:[/bold] Run `alo init` to initialize this workspace.")
+    else:
+        next_steps.append("[bold]Next step:[/bold] In a learning workspace, run `alo paths`.")
+        
+    renderables.append(Panel("\n".join(next_steps), title="Recommendations", border_style="green"))
 
     return Group(*renderables)
 

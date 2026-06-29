@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from alo import config
+import pytest
 
 def test_config_path_is_outside_repo(monkeypatch, tmp_path):
     # Mock home directory
@@ -19,7 +20,6 @@ def test_config_path_is_outside_repo(monkeypatch, tmp_path):
 
 def test_openai_compatible_requires_base_url():
     from alo.config import AloConfig
-    import pytest
     
     with pytest.raises(ValueError):
         AloConfig(llm_provider="openai-compatible", base_url=None)
@@ -54,3 +54,95 @@ def test_no_secret_written_to_repo():
             data = json.load(f)
             assert "sk-" not in str(data)
             assert "key" not in str(data).lower() or data.get("llm_provider") is None
+
+def test_backward_compatible_config():
+    from alo.config import AloConfig
+    # Simulating older config structure parsed from JSON
+    legacy_data = {
+        "llm_provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "api_key_env_var": "MY_LEGACY_KEY"
+    }
+    cfg = AloConfig(**legacy_data)
+    assert cfg.api_key_storage == "env"
+    assert cfg.api_key_env_var == "MY_LEGACY_KEY"
+    assert cfg.api_key_name is None
+
+def test_resolve_api_key_env(monkeypatch):
+    from alo.config import AloConfig, resolve_api_key
+    cfg = AloConfig(api_key_storage="env", api_key_env_var="MOCKED_ENV_KEY")
+    monkeypatch.setenv("MOCKED_ENV_KEY", "sk-test-env-val")
+    key = resolve_api_key(cfg)
+    assert key == "sk-test-env-val"
+
+def test_resolve_api_key_keyring(monkeypatch):
+    from alo.config import AloConfig, resolve_api_key
+    cfg = AloConfig(api_key_storage="keyring", api_key_name="TEST_KEY_NAME")
+    
+    class MockKeyring:
+        def get_password(self, service, username):
+            if username == "TEST_KEY_NAME":
+                return "sk-test-keyring-val"
+            return None
+            
+    import keyring
+    monkeypatch.setattr(keyring, "get_password", MockKeyring().get_password)
+    
+    key = resolve_api_key(cfg)
+    assert key == "sk-test-keyring-val"
+
+def test_config_readiness_missing_provider():
+    from alo.config import AloConfig, validate_config_readiness
+    cfg = AloConfig(llm_provider="")
+    res = validate_config_readiness(cfg)
+    assert res.llm_ready is False
+    assert any(i.key == "llm_provider" and i.status == "missing" for i in res.missing_required)
+
+def test_config_readiness_missing_model():
+    from alo.config import AloConfig, validate_config_readiness
+    cfg = AloConfig(model="")
+    res = validate_config_readiness(cfg)
+    assert res.llm_ready is False
+    assert any(i.key == "model" and i.status == "missing" for i in res.missing_required)
+
+def test_config_readiness_keyring_missing(monkeypatch):
+    from alo.config import AloConfig, validate_config_readiness
+    cfg = AloConfig(api_key_storage="keyring", api_key_name="TEST_KEY")
+    
+    class MockKeyring:
+        def get_password(self, service, username):
+            return None
+    import keyring
+    monkeypatch.setattr(keyring, "get_password", MockKeyring().get_password)
+    
+    res = validate_config_readiness(cfg)
+    assert res.llm_ready is False
+    api_status = next(i for i in res.missing_required if i.key == "api_key")
+    assert api_status.status == "missing"
+    assert "keyring entry missing" in api_status.safe_value
+
+def test_config_readiness_env_present_is_masked(monkeypatch):
+    from alo.config import AloConfig, validate_config_readiness
+    cfg = AloConfig(api_key_storage="env", api_key_env_var="MY_KEY")
+    monkeypatch.setenv("MY_KEY", "secret-value")
+    
+    res = validate_config_readiness(cfg)
+    assert res.llm_ready is True
+    api_status = next(i for i in res.items if i.key == "api_key")
+    assert api_status.status == "configured"
+    assert "secret-value" not in api_status.safe_value
+    assert "MY_KEY present" in api_status.safe_value
+
+def test_config_readiness_base_url_requirements():
+    from alo.config import AloConfig, validate_config_readiness
+    
+    # openai ignores base url requirement
+    cfg1 = AloConfig.model_construct(llm_provider="openai", base_url="")
+    res1 = validate_config_readiness(cfg1)
+    # assuming we test with valid keyring/env to isolate base_url
+    assert not any(i.key == "base_url" and i.required for i in res1.items)
+    
+    # openai-compatible requires it
+    cfg2 = AloConfig.model_construct(llm_provider="openai-compatible", base_url=None)
+    res2 = validate_config_readiness(cfg2)
+    assert any(i.key == "base_url" and i.required for i in res2.items)

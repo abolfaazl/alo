@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from alo.exceptions import MissingAPIKeyError, KeyringUnavailableError
 from alo import markdown_store, config as alo_config
 from alo.llm.client import generate_paths, generate_mock_paths
 from alo.state_manager import (
@@ -14,6 +15,7 @@ from alo.state_manager import (
 @dataclass
 class PathsServiceResult:
     success: bool
+    error_code: str = None
     paths: list = None
     error: str = None
     warning: str = None
@@ -34,8 +36,11 @@ def get_paths(repo_path: Path, mock: bool = False) -> PathsServiceResult:
     context = f"Profile:\n{lp}\n\nSkill Map:\n{sm}\n\nWeaknesses:\n{wk}"
 
     if not mock:
-        if not alo_config.config_exists():
-            return PathsServiceResult(success=False, error="ALO needs LLM configuration to generate personalized learning paths.\nRun: alo config")
+        cfg = alo_config.load_config()
+        readiness = alo_config.validate_config_readiness(cfg)
+        if not readiness.llm_ready:
+            missing = ", ".join([i.label for i in readiness.missing_required])
+            return PathsServiceResult(success=False, error_code="missing_config", error=f"ALO needs LLM configuration. Missing: {missing}")
 
     if mock:
         llm_response = generate_mock_paths(subject)
@@ -45,11 +50,12 @@ def get_paths(repo_path: Path, mock: bool = False) -> PathsServiceResult:
             llm_response = generate_paths(context)
             if not llm_response:
                 return PathsServiceResult(success=False, error="Failed to generate paths.")
-        except ValueError as e:
-            err_msg = str(e)
-            if "not set" in err_msg.lower() or "missing" in err_msg.lower():
-                err_msg = "Configured API key environment variable is missing.\nSet the configured environment variable or update alo config."
-            return PathsServiceResult(success=False, error=err_msg)
+        except MissingAPIKeyError as e:
+            return PathsServiceResult(success=False, error_code="missing_api_key", error=str(e))
+        except KeyringUnavailableError as e:
+            return PathsServiceResult(success=False, error_code="keyring_unavailable", error=str(e))
+        except Exception as e:
+            return PathsServiceResult(success=False, error_code="llm_error", error=f"LLM or processing error: {e}")
             
     if not llm_response or not hasattr(llm_response, "paths") or len(llm_response.paths) != 3:
         return PathsServiceResult(success=False, error="LLM failed to return exactly 3 learning paths.")

@@ -6,50 +6,94 @@ Whether you're learning English grammar, Java Spring Boot, or Product Management
 
 ## Installation
 
-Install globally using `pipx` (recommended):
+Install globally using `pipx` or `uv` (recommended):
 
 ```bash
-pipx install alo
+pipx install D:\ALO
+# or
+uv tool install D:\ALO
 ```
 
-Or for development:
+### Developer / Local Test Installation
 
-```bash
-pip install -e .[dev]
+If you are developing ALO, you can install it into a test virtual environment:
+
+```powershell
+# In PowerShell:
+cd D:\ALO
+python -m venv .venv-test
+.\.venv-test\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
+alo --help
+alo doctor
 ```
 
-## Usage
+## Quickstart
 
 ALO separates the tool from your learning data. You should install ALO once, then create separate folders for each subject you want to learn.
 
-### 1. Initialize a Learning Workspace
+**Important**: Do not run learning workspace `init` inside the ALO source repo.
 
-Create a new folder for your learning project and run `alo init`:
+### 1. Create a Learning Workspace
 
-```bash
-mkdir learning-english
-cd learning-english
-alo init
+Create a new folder for your learning project and open it:
+
+```powershell
+mkdir D:\learn\English
+cd D:\learn\English
+alo
 ```
 
-ALO will ask you a few questions about your background, experience level, and goals, and then create the necessary subject-agnostic Markdown state files (like `learning-profile.md` and `skill-map.md`). ALO will also optionally initialize a Git repository to version control your learning progress.
+### 2. Initialize
 
-### 2. Configure the LLM
+From inside the interactive dashboard (or CLI), initialize the workspace state files:
+
+*   **Command**: `init` (or `alo init`)
+
+ALO will ask you a few questions about your background, experience level, and goals, and then create the necessary subject-agnostic Markdown state files (like `learning-profile.md` and `skill-map.md`).
+
+### 3. Configure the LLM
 
 To generate domain-specific assessments and roadmaps, you must configure ALO with an LLM provider:
 
-```bash
-alo config
+*   **Command**: `config` (or `alo config`)
+
+#### Safe API Key Guidance
+*   **Recommended**: `keyring` mode. You will be prompted to paste your API key securely into a masked terminal prompt. It is stored securely in your OS credential manager.
+*   **Alternative**: `env` mode. You can export an environment variable in your shell (e.g. `OPENAI_API_KEY`) and tell ALO to read from that variable name.
+*   **Never** paste API keys directly into Markdown files.
+*   **Never** commit API keys to Git.
+
+**Example for OpenAI-compatible providers:**
+```text
+Provider: openai-compatible
+Base URL: https://api.example.com/v1
+Model: gpt-4o-mini
+API key storage: keyring
 ```
 
-### 3. Run an Assessment
+### 4. Test LLM Connection
 
-Run a domain-specific LLM assessment based on your initialized workspace profile:
+Once configured, verify the connection works:
 
-```bash
-alo assess
-```
+*   **Command**: `Test LLM Connection` from the settings menu.
 
-ALO will read your learning profile and dynamically generate exactly 20 appropriate questions based on your current subject, goal, and knowledge level.
+### 5. Learning Flow
 
-*(Note: ALO source code is never stored in your learning workspaces.)*
+Continue through the guided flow:
+
+*   `paths` - Generate learning path options based on your profile and assessment.
+*   `roadmap` - Generate or update the roadmap for the active path.
+*   `learn` - Run a single daily learning session based on the current workspace roadmap.
+*   `review` - Review past concepts and update your weaknesses profile.
+
+### 6. Git Sync
+
+ALO safely commits changes to your Markdown state files.
+
+*   `sync --dry-run` - Preview which learning-state files would be committed without changing Git.
+*   `sync --no-push` - Commit changes locally without pushing to a remote.
+*   `sync` - Commit and push (if auto-push is enabled and a remote is configured).
+
+*(Note: ALO only commits files specified in its internal safe-list. It will never commit unknown files or secrets.)*

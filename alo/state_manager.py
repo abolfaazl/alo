@@ -194,6 +194,100 @@ def upsert_weakness(repo_path: Path, weakness: WeaknessEntry) -> bool:
         
     return True
 
+def get_active_weaknesses(repo_path: Path) -> list:
+    weaknesses_path = repo_path / "weaknesses.md"
+    content = markdown_store.read_text_safely(weaknesses_path)
+    if not content:
+        return []
+    
+    import re
+    blocks = re.split(r"(?=### ALO-WK-\w+)", content)
+    active = []
+    for block in blocks:
+        if not block.startswith("### ALO-WK-"):
+            continue
+        status_match = re.search(r"Status:\s*(.*)", block)
+        if status_match:
+            status = status_match.group(1).strip().lower()
+            if status in ["open", "active", "improving"]:
+                id_match = re.search(r"### (ALO-WK-[^\:]+)", block)
+                if id_match:
+                    active.append({"id": id_match.group(1).strip(), "content": block.strip()})
+    return active
+
+def get_weakness_by_id(repo_path: Path, weakness_id: str) -> dict | None:
+    weaknesses_path = repo_path / "weaknesses.md"
+    content = markdown_store.read_text_safely(weaknesses_path)
+    if not content:
+        return None
+    import re
+    blocks = re.split(r"(?=### ALO-WK-\w+)", content)
+    for block in blocks:
+        if block.startswith(f"### {weakness_id}"):
+            return {"id": weakness_id, "content": block.strip()}
+    return None
+
+def update_weakness_status(repo_path: Path, weakness_id: str, status: str, last_reviewed: str = "", review_result: str = "") -> bool:
+    weaknesses_path = repo_path / "weaknesses.md"
+    content = markdown_store.read_text_safely(weaknesses_path)
+    if not content:
+        return False
+    
+    lines = content.split('\n')
+    found_item = False
+    updated = False
+    for i, line in enumerate(lines):
+        if line.startswith(f"### {weakness_id}"):
+            found_item = True
+            continue
+        
+        if found_item and line.startswith('### '):
+            break
+            
+        if found_item and line.startswith('Status:'):
+            lines[i] = f"Status: {status}"
+            if last_reviewed and review_result:
+                lines.insert(i + 1, f"Review Result: {review_result}")
+                lines.insert(i + 1, f"Last Reviewed: {last_reviewed}")
+            updated = True
+            break
+            
+    if updated:
+        markdown_store.write_text_safely(weaknesses_path, '\n'.join(lines))
+        return True
+    return False
+
+def get_roadmap_review_targets(repo_path: Path) -> list:
+    rm_path = repo_path / "roadmap.md"
+    content = markdown_store.read_text_safely(rm_path)
+    if not content:
+        return []
+    import re
+    blocks = re.split(r"(?=### ALO-RM-\d+)", content)
+    
+    targets = []
+    # priorities: 1. needs_review, 2. practiced
+    for status_target in ["needs_review", "practiced"]:
+        for block in blocks:
+            if not block.startswith("### ALO-RM-"):
+                continue
+            match = re.search(r"Status: ([a-z_]+)", block)
+            if match and match.group(1) == status_target:
+                id_match = re.search(r"### (ALO-RM-\d+)", block)
+                if id_match:
+                    targets.append({"id": id_match.group(1).strip(), "content": block.strip()})
+    return targets
+
+def append_review_progress(repo_path: Path, eval_result, target_title: str):
+    msg = (
+        f"Outcome: {eval_result.result}\n"
+        f"Score: {eval_result.score}\n"
+        f"What was reviewed: {target_title}\n"
+        f"Remaining gaps: {eval_result.remaining_gaps}\n"
+        f"Next recommendation: {eval_result.recommended_next_step}"
+    )
+    _append_to_progress_log(repo_path, f"Review — {target_title}", msg)
+
 def has_user_content(file_path: Path, default_template: str) -> bool:
     content = markdown_store.read_text_safely(file_path)
     if not content:

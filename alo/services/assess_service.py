@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
+from alo.exceptions import MissingAPIKeyError, KeyringUnavailableError
 from alo import state_manager, config as alo_config
 from alo.llm.client import generate_assessment, generate_mock_assessment
 from alo.models import AssessmentQuestion, AssessmentMode
@@ -9,6 +10,7 @@ from alo.models import AssessmentQuestion, AssessmentMode
 @dataclass
 class AssessGenerateResult:
     success: bool
+    error_code: str = None
     questions: list[AssessmentQuestion] = None
     subject: str = None
     error: str = None
@@ -17,20 +19,20 @@ class AssessGenerateResult:
 @dataclass
 class AssessScoreResult:
     success: bool
+    error_code: str = None
     result: any = None
     error: str = None
 
 def generate_assessment_service(repo_path: Path, mock: bool = False) -> AssessGenerateResult:
     state_manager.ensure_state_files(repo_path)
     
-    if not alo_config.config_exists() and not mock:
-        return AssessGenerateResult(success=False, error="ALO needs LLM configuration to generate a domain-specific assessment.\nRun: `alo config`")
-        
     if not mock:
         cfg = alo_config.load_config()
-        import os
-        if not os.environ.get(cfg.api_key_env_var):
-            return AssessGenerateResult(success=False, error=f"Configured API key environment variable is missing.\nSet {cfg.api_key_env_var} or update `alo config`.")
+        readiness = alo_config.validate_config_readiness(cfg)
+        if not readiness.llm_ready:
+            missing = ", ".join([i.label for i in readiness.missing_required])
+            return AssessGenerateResult(success=False, error_code="missing_config", error=f"ALO needs LLM configuration. Missing: {missing}")
+        
 
     lp = state_manager.markdown_store.read_text_safely(repo_path / "learning-profile.md")
     
@@ -63,8 +65,12 @@ def generate_assessment_service(repo_path: Path, mock: bool = False) -> AssessGe
             llm_response = generate_assessment(subject, goal, level, bg)
             if not llm_response:
                 return AssessGenerateResult(success=False, error="Failed to generate assessment.")
-        except ValueError as e:
-            return AssessGenerateResult(success=False, error=str(e))
+        except MissingAPIKeyError as e:
+            return AssessGenerateResult(success=False, error_code="missing_api_key", error=str(e))
+        except KeyringUnavailableError as e:
+            return AssessGenerateResult(success=False, error_code="keyring_unavailable", error=str(e))
+        except Exception as e:
+            return AssessGenerateResult(success=False, error_code="llm_error", error=f"LLM or processing error: {e}")
             
     questions = []
     for q in llm_response.questions:
