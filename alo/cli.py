@@ -165,11 +165,96 @@ def init(
     # Removed due to rewrite
 
 @app.command()
-def status():
+def status(
+    json_output: bool = typer.Option(False, "--json", help="Output status as JSON")
+):
     """Shows current learning state."""
     cwd = Path.cwd()
-    from alo.ui import views
-    console.print(views.build_status_view(cwd))
+    from alo.services.status_service import compute_workspace_status
+    
+    status_obj = compute_workspace_status(cwd)
+    
+    if json_output:
+        print(status_obj.model_dump_json(indent=2))
+        return
+
+    if status_obj.is_source_repo:
+        console.print("[yellow]This is the ALO development repository.[/yellow]")
+        console.print("Do not treat it as a learning workspace.")
+        console.print("Next step: Create a separate learning workspace using `alo init` in a new directory.")
+        raise typer.Exit(0)
+        
+    if not status_obj.is_workspace:
+        console.print("[red]Not an ALO workspace. Missing learning-profile.md.[/red]")
+        console.print("Next step: Run `alo init`")
+        raise typer.Exit(1)
+        
+    from rich.panel import Panel
+    from rich.console import Group
+    from rich.text import Text
+    import sys
+    
+    py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    from alo import __version__
+    
+    renderables = []
+    
+    # Workspace block
+    ws_text = "[bold]Workspace[/bold]\n"
+    ws_text += f"- Path: {status_obj.workspace_path}\n"
+    ws_text += f"- Subject: {status_obj.subject}\n"
+    ws_text += f"- Python: {py_version}\n"
+    ws_text += f"- ALO version: {__version__}\n"
+    renderables.append(Text.from_markup(ws_text))
+    
+    # Learning Stats
+    stats = status_obj.stats
+    st_text = "[bold]Learning Stats[/bold]\n"
+    st_text += f"- Lessons completed: {stats.lessons_completed}\n"
+    st_text += f"- Reviews completed: {stats.reviews_completed}\n"
+    st_text += f"- Practice sessions: {stats.practice_sessions}\n"
+    st_text += f"- Active days: {stats.active_learning_days}\n"
+    st_text += f"- Current streak: {stats.current_streak_days} days\n"
+    st_text += f"- Roadmap completion: {stats.roadmap_completion_percent}%\n"
+    renderables.append(Text.from_markup(st_text))
+    
+    # Gamification
+    gam = status_obj.gamification
+    earned_badges = sum(1 for b in gam.badges if b.earned)
+    total_badges = len(gam.badges)
+    gm_text = "[bold]Learning Momentum[/bold]\n"
+    gm_text += f"- XP: {gam.xp}\n"
+    gm_text += f"- Level: {gam.level}\n"
+    gm_text += f"- Weekly goal: {gam.weekly_goal_progress} / {gam.weekly_goal_target} days\n"
+    gm_text += f"- Earned badges: {earned_badges} / {total_badges}\n"
+    renderables.append(Text.from_markup(gm_text))
+    
+    # Portfolio
+    port = status_obj.portfolio
+    pt_text = "[bold]Portfolio[/bold]\n"
+    pt_text += f"- README.md: {'exists' if port.readme_exists else 'missing'}\n"
+    pt_text += f"- Charts: {port.charts_existing} / {port.charts_total} generated\n"
+    for c_name, exists in port.chart_files.items():
+        pt_text += f"- assets/{c_name}: {'exists' if exists else 'missing'}\n"
+    renderables.append(Text.from_markup(pt_text))
+    
+    # Git
+    git = status_obj.git
+    gt_text = "[bold]Git Sync[/bold]\n"
+    gt_text += f"- Git repo: {'yes' if git.is_git_repo else 'no'}\n"
+    gt_text += f"- Remote configured: {'yes' if git.remote_configured else 'no'}\n"
+    gt_text += f"- Safe generated files: {'ready' if port.readme_exists else 'not ready'}\n"
+    gt_text += f"- Unsafe staged files: {'none' if git.unsafe_staged_count == 0 else str(git.unsafe_staged_count)}\n"
+    renderables.append(Text.from_markup(gt_text))
+    
+    # Next Steps
+    ns_text = "[bold]Next Step[/bold]\n"
+    for step in status_obj.next_steps:
+        ns_text += f"- {step}\n"
+    renderables.append(Text.from_markup(ns_text))
+    
+    panel = Panel(Group(*renderables), title="[bold cyan]ALO Workspace Status[/bold cyan]", border_style="cyan")
+    console.print(panel)
 
 @app.command()
 def assess(

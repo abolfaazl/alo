@@ -32,3 +32,6 @@ Implement a `status` command or dashboard view that exposes metrics from the Sta
 
 ## Priority
 P2
+
+## Implementation Note
+Implemented in Phase 19.
