@@ -3,22 +3,42 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "alo"
-version = "1.0.1"
-description = "Agentic Learning OS"
+name = "alo-learning-os"
+version = "1.0.2"
+description = "Agentic Learning OS - An interactive, AI-native framework for learning in the terminal."
 readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "abolfaazl", email = "abolfaazl@users.noreply.github.com" }
+]
+keywords = ["learning", "os", "llm", "ai", "terminal", "education"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12"
+]
 dependencies = [
     "typer>=0.12.3",
+    "textual>=0.74.1",
+    "pydantic>=2.8.2",
+    "openai>=1.37.1",
     "rich>=13.7.1",
-    "pydantic>=2.7.0",
-    "openai>=1.40.0,<2.0.0",
-    "GitPython>=3.1.0",
-    "textual>=0.70.0",
+    "gitpython>=3.1.43",
+    "keyring>=25.3.0",
     "arabic-reshaper>=3.0.0",
-    "python-bidi>=0.4.2",
-    "keyring>=24.0.0"
+    "python-bidi>=0.4.2"
 ]
+
+[project.urls]
+Homepage = "https://github.com/abolfaazl/alo"
+Repository = "https://github.com/abolfaazl/alo"
+Issues = "https://github.com/abolfaazl/alo/issues"
 
 [project.optional-dependencies]
 dev = [
