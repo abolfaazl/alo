@@ -1,6 +1,8 @@
 # ALO — Agentic Learning OS
 
-A CLI/TUI learning workspace that helps you plan, practice, review, and track any subject with Markdown, Git, and LLM-assisted guidance.
+Turn any folder into a learning workspace.
+
+ALO is a local-first CLI/TUI for building a personal learning system around any subject. It keeps your profile, roadmap, lessons, weaknesses, reviews, and progress in Markdown files you can read, edit, and commit.
 
 [![PyPI Version](https://img.shields.io/pypi/v/alo-learning-os)](https://pypi.org/project/alo-learning-os/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
@@ -14,79 +16,85 @@ pip install alo-learning-os
 alo
 ```
 
-You can also check the installation:
+Check the installation:
 ```bash
 alo version
 alo doctor
 ```
 
-The PyPI distribution name is `alo-learning-os`.
-The installed command is `alo`.
+*(Note: The PyPI distribution name is `alo-learning-os`. The installed command is `alo`.)*
 
-## What ALO Is
+## Why ALO?
 
-ALO is not a course platform.
-ALO is not a note-taking app.
-ALO is not a chatbot wrapper.
+Most learning starts with enthusiasm and then disappears into scattered notes, unfinished tutorials, lost context, too many tabs, and generic study plans with no real review loop or progress history.
 
-ALO is a local learning workspace manager.
+ALO’s answer is simple:
+- One folder per subject
+- Markdown state files
+- A personal roadmap tailored to you
+- Daily focused learning sessions
+- Built-in review loop for your weaknesses
+- Safe Git history to track progress
 
-It uses Markdown state files, LLM-assisted assessment/roadmap/lesson/review generation, and safe Git sync to create a separate workspace per subject. You install the global CLI once, and can initialize as many subject workspaces as you need.
+## What It Feels Like
 
-## Why It Exists
-
-Most learning starts with enthusiasm and then disappears into scattered notes, tabs, videos, and unfinished plans.
-
-ALO keeps the learning system inside a folder: profile, skill map, roadmap, weaknesses, lessons, reviews, and progress log.
-
-## How It Works
-
-```text
-Install ALO
-   ↓
-Create a learning workspace
-   ↓
-Initialize profile and state files
-   ↓
-Configure an LLM provider
-   ↓
-Generate paths and roadmap
-   ↓
-Run daily learn/review sessions
-   ↓
-Sync safe Markdown state with Git
-```
-
-## Quickstart
-
-Create a new folder for your learning project and open it:
-
-```powershell
-mkdir D:\learn\English
-cd D:\learn\English
+```bash
+pip install alo-learning-os
+mkdir my-python-learning
+cd my-python-learning
 alo
 ```
 
-Inside the interactive dashboard, you can run:
-- `init`
-- `config`
-- `paths`
-- `roadmap`
-- `learn`
-- `review`
-- `sync --dry-run`
-- `sync --no-push`
+The workflow is straightforward. You can use the interactive dashboard (`alo`) or direct CLI commands:
+`init → config → paths → roadmap → learn → review → sync`
 
-You can also use the direct CLI commands:
-```bash
-alo init
-alo config
-alo paths
-alo roadmap
-alo learn
-alo review
-alo sync --dry-run
+## Terminal Preview
+
+```text
+$ alo doctor
+Checks Python, Git, workspace status, and LLM readiness.
+
+$ alo paths
+Generates learning path options based on your profile.
+
+$ alo learn
+Starts a focused learning session from the current roadmap.
 ```
+
+*(Screenshots and a short demo GIF are planned).*
+
+## Workspace File Tree
+
+Nothing is hidden in a database. Nothing is locked inside a web app. The workspace is just files.
+
+```text
+my-python-learning/
+├─ learning-profile.md
+├─ skill-map.md
+├─ learning-paths.md
+├─ roadmap.md
+├─ weaknesses.md
+├─ progress-log.md
+├─ tutor-rules.md
+└─ privacy-rules.md
+```
+
+## What ALO is not
+
+- Not a course marketplace
+- Not a hosted learning platform
+- Not a notes app
+- Not a chatbot skin
+
+ALO is the layer that keeps your learning process organized.
+
+## Who It’s For
+
+- Developers learning new stacks
+- Designers learning product/UX
+- Product managers building structured knowledge
+- Students who want versioned learning notes
+- Self-learners who want a review loop
 
 ## Workspace Files
 
@@ -123,10 +131,13 @@ Storage: keyring
 
 ## Git Sync Safety
 
-ALO does not run `git add .`.
-ALO only stages known learning-state files.
-ALO blocks unsafe staged files.
-ALO scans for secret-looking content before committing.
+ALO takes Git sync seriously to prevent accidental secret leaks or unwanted file tracking.
+
+- ALO never uses `git add .`
+- Only known learning files are staged.
+- Unsafe staged files block sync.
+- Secret-looking content blocks commits.
+- Dry-run is available.
 
 ```bash
 alo sync --dry-run
@@ -159,17 +170,20 @@ alo learn --mock
 alo review --mock
 ```
 
-## Demo
-
-Screenshots and a short terminal demo GIF are planned.
-
 ## Roadmap
 
-- **v1.0.x** — public PyPI release, secure config, Git-safe sync
-- **v1.1.0** — workspace README generator, learning stats, progress charts, gamification
-- **Later** — roadmap import, examples gallery, richer dashboard QA
+- **Now:** public PyPI release, secure config, Git-safe sync
+- **Next:** workspace README generator, learning stats, progress charts, streaks
+- **Later:** roadmap import, examples gallery, richer dashboard UX
 
-Future research: importing external roadmaps such as roadmap.sh-compatible structures.
+*(Note: `roadmap.sh`-compatible import is future research, not current functionality.)*
+
+## Current Limitations
+
+- Python 3.12+ only
+- LLM features require a configured provider unless mock mode is used
+- Screenshots/GIF are not added yet
+- Direct roadmap.sh integration is not implemented yet
 
 ## Security
 
