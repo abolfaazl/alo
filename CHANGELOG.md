@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.1.0
+
+### Added
+- Learning stats engine for local workspace metrics.
+- Workspace README generator via `alo readme`.
+- Local SVG progress charts via `alo charts`.
+- Portfolio README chart integration with `--include-charts`.
+- Local gamification summary and milestone badges via `alo badges`.
+- Optional README momentum section with `--include-gamification`.
+- Workspace status summary via `alo status`.
+- Dashboard support for portfolio commands and live status panel.
+
+### Security
+- Generated README and SVG outputs avoid raw Markdown dumps and sanitize secret-looking content.
+- Git sync safe-list only allows known learning files, root `README.md`, and the four generated ALO SVG assets.
+
+### Notes
+- Roadmap import is not included in v1.1.0 and remains future work.
+
 ## v1.0.4
 - Fixed PyPI Trusted Publishing workflow by declaring the `pypi` GitHub environment in the publish job.
 - Supersedes v1.0.3 for real PyPI publishing.

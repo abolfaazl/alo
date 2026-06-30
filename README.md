@@ -158,6 +158,10 @@ alo sync --no-push
 | `alo learn` | Starts a daily learning and practice session |
 | `alo review` | Initiates a review session focused on past weaknesses |
 | `alo sync` | Safely commits changes to Markdown state files and pushes to remote |
+| `alo readme` | Generates a workspace README.md portfolio (options: `--include-charts --include-gamification`) |
+| `alo charts` | Generates local SVG progress charts in assets/ |
+| `alo badges` | Displays local gamification summary and earned badges |
+| `alo status` | Summarizes the current workspace state and momentum |
 
 ## Mock Mode / Offline Demo
 
@@ -174,8 +178,7 @@ alo review --mock
 
 See [v1.1.0 planning](docs/roadmap-v1.1.md) for the next milestone.
 
-- **Now:** public PyPI release, secure config, Git-safe sync
-- **Next:** workspace README generator, learning stats, progress charts, streaks
+- **Now:** workspace README generator, learning stats, progress charts, streaks
 - **Later:** roadmap import, examples gallery, richer dashboard UX
 
 *(Note: `roadmap.sh`-compatible import is future research, not current functionality.)*

@@ -969,12 +969,15 @@ class DashboardScreen(Screen):
         from alo.ui import views
         
         cwd = Path.cwd()
-        status = compute_workspace_status(cwd)
-        from alo import state_manager
-        lp = state_manager.get_active_learning_path(cwd)
-        active_path_title = lp["title"] if lp else "None"
-        
         widgets = []
+        
+        try:
+            status = compute_workspace_status(cwd)
+        except Exception as e:
+            widgets.append(Label("Workspace Error", classes="sidebar-title", id="uninitialized-warning"))
+            widgets.append(Label(f"Error reading status:\n{e}", classes="sidebar-text"))
+            return widgets
+
         if status.is_workspace:
             widgets.append(Label("Workspace", classes="sidebar-title"))
             widgets.append(Label(views.truncate_middle(str(cwd), 30), classes="sidebar-text"))
@@ -984,6 +987,22 @@ class DashboardScreen(Screen):
             widgets.append(Label(status.subject or "None", classes="sidebar-text"))
             widgets.append(Static("", classes="spacer"))
             
+            try:
+                from alo import state_manager
+                lp = state_manager.get_active_learning_path(cwd)
+                if isinstance(lp, dict):
+                    active_path_title = (
+                        lp.get("title")
+                        or lp.get("name")
+                        or lp.get("label")
+                        or lp.get("id")
+                        or "None"
+                    )
+                else:
+                    active_path_title = "None"
+            except Exception:
+                active_path_title = "Error"
+                
             widgets.append(Label("Active Path", classes="sidebar-title"))
             widgets.append(Label(active_path_title, classes="sidebar-text"))
             widgets.append(Static("", classes="spacer"))
@@ -1000,25 +1019,39 @@ class DashboardScreen(Screen):
                 widgets.append(Label(f"Active days: {status.stats.active_learning_days}", classes="sidebar-text"))
                 widgets.append(Label(f"Current streak: {status.stats.current_streak_days} days", classes="sidebar-text"))
                 widgets.append(Static("", classes="spacer"))
+            else:
+                widgets.append(Label("Learning Stats", classes="sidebar-title"))
+                widgets.append(Label("No stats data", classes="sidebar-text"))
+                widgets.append(Static("", classes="spacer"))
             
             if status.gamification:
                 widgets.append(Label("Momentum", classes="sidebar-title"))
                 widgets.append(Label(f"XP: {status.gamification.xp}", classes="sidebar-text"))
                 widgets.append(Label(f"Level: {status.gamification.level}", classes="sidebar-text"))
                 widgets.append(Label(f"Weekly goal: {status.gamification.weekly_goal_progress}/{status.gamification.weekly_goal_target}", classes="sidebar-text"))
-                earned = [b for b in status.gamification.badges if b.earned]
+                earned = [b for b in status.gamification.badges if getattr(b, "earned", False)]
                 widgets.append(Label(f"Earned badges: {len(earned)}", classes="sidebar-text"))
+                widgets.append(Static("", classes="spacer"))
+            else:
+                widgets.append(Label("Momentum", classes="sidebar-title"))
+                widgets.append(Label("No momentum data", classes="sidebar-text"))
                 widgets.append(Static("", classes="spacer"))
                 
             if status.portfolio:
                 widgets.append(Label("Portfolio", classes="sidebar-title"))
-                widgets.append(Label(f"README: {'exists' if status.portfolio.readme_exists else 'missing'}", classes="sidebar-text"))
-                widgets.append(Label(f"Charts: {status.portfolio.charts_existing}/{status.portfolio.charts_total}", classes="sidebar-text"))
+                widgets.append(Label(f"README: {'exists' if getattr(status.portfolio, 'readme_exists', False) else 'missing'}", classes="sidebar-text"))
+                widgets.append(Label(f"Charts: {getattr(status.portfolio, 'charts_existing', 0)}/{getattr(status.portfolio, 'charts_total', 4)}", classes="sidebar-text"))
                 widgets.append(Static("", classes="spacer"))
                 
             widgets.append(Label("Next Step", classes="sidebar-title"))
             if status.next_steps:
                 widgets.append(Label(status.next_steps[0], classes="sidebar-text"))
+                
+            if status.warnings:
+                widgets.append(Static("", classes="spacer"))
+                widgets.append(Label("Warnings", classes="sidebar-title", id="uninitialized-warning"))
+                for w in status.warnings:
+                    widgets.append(Label(f"- {w}", classes="sidebar-text"))
             
         else:
             widgets.append(Label("Workspace", classes="sidebar-title"))

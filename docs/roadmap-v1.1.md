@@ -77,8 +77,9 @@ Workspace State (MD) -> Stats Service -> Gamification Service -> Chart Service -
 - PyPI installation remains functional
 
 ## Implementation Status
-- **P0 Learning Stats Engine:** Implemented in Phase 15.
-- **P1 Workspace README Generator:** Implemented in Phase 16.
-- **P1 Progress Charts:** Implemented in Phase 17.
-- **P2 Gamification:** Implemented in Phase 18.
-- **P2 Workspace Status Command:** Implemented in Phase 19.
+- **P0 Learning Stats Engine:** Completed.
+- **P1 Workspace README Generator:** Completed.
+- **P1 Progress Charts:** Completed.
+- **P2 Gamification:** Completed.
+- **P2 Workspace Status Command:** Completed.
+- **P3 Roadmap Import Research:** Deferred to v1.2.0.
