@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.4
+- Fixed PyPI Trusted Publishing workflow by declaring the `pypi` GitHub environment in the publish job.
+- Supersedes v1.0.3 for real PyPI publishing.
+
 ## v1.0.3
 - Public release candidate.
 - Declares Python 3.12+ support.
