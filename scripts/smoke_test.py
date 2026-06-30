@@ -43,10 +43,10 @@ def main():
         
         # 5. version
         out = run_command([python, "-m", "alo.cli", "version"], cwd=temp_dir, env=env)
-        assert "Version: 1.0.2" in out, "Version output mismatch"
+        assert "Version: 1.0.3" in out, "Version output mismatch"
         
         out = run_command([python, "-m", "alo.cli", "--version"], cwd=temp_dir, env=env)
-        assert "Version: 1.0.2" in out, "--version output mismatch"
+        assert "Version: 1.0.3" in out, "--version output mismatch"
         
         # 6. doctor
         out = run_command([python, "-m", "alo.cli", "doctor"], cwd=temp_dir, env=env)

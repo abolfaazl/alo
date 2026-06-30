@@ -1,7 +1,15 @@
 # Changelog
 
+## v1.0.3
+- Public release candidate.
+- Declares Python 3.12+ support.
+- CI adjusted to the supported Python version.
+- Real PyPI publish workflow gated to avoid accidental publish before Trusted Publishing setup.
+- Added TestPyPI gate.
+
 ## v1.0.2
-- Public PyPI release as alo-learning-os.
+- Public GitHub preparation.
+- Superseded by v1.0.3 due to CI/publish gating fixes.
 - CLI command remains alo.
 
 ## v1.0.1

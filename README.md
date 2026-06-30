@@ -1,4 +1,7 @@
-# ALO (Agentic Learning OS)
+# ALO
+
+Requires Python 3.12+
+ (Agentic Learning OS)
 
 ALO is a globally installed CLI tool that allows you to initialize and manage independent learning workspaces for any subject. 
 

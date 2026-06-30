@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alo-learning-os"
-version = "1.0.2"
+version = "1.0.3"
 description = "Agentic Learning OS - An interactive, AI-native framework for learning in the terminal."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
   { name = "abolfaazl", email = "abolfaazl@users.noreply.github.com" }
@@ -19,8 +19,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Education",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12"
 ]
 dependencies = [
