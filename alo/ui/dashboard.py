@@ -962,7 +962,7 @@ class DashboardScreen(Screen):
             self.show_choices("Generate learning paths?", ["yes", "no"])
         
     def _build_sidebar_widgets(self):
-        from textual.widgets import Label, Static
+        from textual.widgets import Static
         from textual.containers import Vertical
         from alo import __version__
         from alo.services.status_service import compute_workspace_status
@@ -1421,8 +1421,6 @@ class DashboardScreen(Screen):
 
     def run_status_cmd(self, args, log, cwd):
         from alo.services.status_service import compute_workspace_status
-        from textual.widgets import Static
-        from rich.panel import Panel
         from rich.text import Text
         
         status_obj = compute_workspace_status(cwd)
@@ -1449,12 +1447,17 @@ class DashboardScreen(Screen):
             
         from alo.cli import app
         from typer.testing import CliRunner
+        from rich.text import Text
         runner = CliRunner()
         cmd_args = ["readme"]
-        if parsed.include_charts: cmd_args.append("--include-charts")
-        if parsed.include_gamification: cmd_args.append("--include-gamification")
-        if parsed.force: cmd_args.append("--force")
-        if parsed.dry_run: cmd_args.append("--dry-run")
+        if parsed.include_charts:
+            cmd_args.append("--include-charts")
+        if parsed.include_gamification:
+            cmd_args.append("--include-gamification")
+        if parsed.force:
+            cmd_args.append("--force")
+        if parsed.dry_run:
+            cmd_args.append("--dry-run")
         
         res = runner.invoke(app, cmd_args)
         log.write(Text.from_ansi(res.stdout))
@@ -1467,10 +1470,13 @@ class DashboardScreen(Screen):
             
         from alo.cli import app
         from typer.testing import CliRunner
+        from rich.text import Text
         runner = CliRunner()
         cmd_args = ["charts"]
-        if parsed.force: cmd_args.append("--force")
-        if parsed.dry_run: cmd_args.append("--dry-run")
+        if parsed.force:
+            cmd_args.append("--force")
+        if parsed.dry_run:
+            cmd_args.append("--dry-run")
         
         res = runner.invoke(app, cmd_args)
         log.write(Text.from_ansi(res.stdout))
@@ -1479,6 +1485,7 @@ class DashboardScreen(Screen):
     def run_badges_cmd(self, args, log, cwd):
         from alo.cli import app
         from typer.testing import CliRunner
+        from rich.text import Text
         runner = CliRunner()
         res = runner.invoke(app, ["badges"])
         log.write(Text.from_ansi(res.stdout))
