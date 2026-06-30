@@ -38,3 +38,4 @@ P1
 
 ## Implementation Note
 Implemented in Phase 16.
+Integrated with local SVG charts in Phase 17.5.

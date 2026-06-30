@@ -86,7 +86,7 @@ def sanitize_content(content: str) -> str:
         sanitized = re.sub(pattern, "[REDACTED]", sanitized, flags=re.IGNORECASE)
     return sanitized
 
-def generate_workspace_readme(workspace_path: Path) -> str:
+def generate_workspace_readme(workspace_path: Path, *, include_charts: bool = False) -> str:
     subject = extract_subject(workspace_path)
     stats = compute_learning_stats(workspace_path)
     weakness_summary = extract_weakness_summary(workspace_path)
@@ -98,10 +98,32 @@ def generate_workspace_readme(workspace_path: Path) -> str:
         else:
             roadmap_desc = f"{stats.roadmap_completed_items} of {stats.roadmap_total_items} items completed ({stats.roadmap_completion_percent}%)."
 
+    charts_section = ""
+    if include_charts:
+        charts_section = """
+## Progress Overview
+
+<p>
+  <img src="assets/alo-progress.svg" alt="Learning progress" />
+</p>
+
+<p>
+  <img src="assets/alo-practice.svg" alt="Practice volume" />
+</p>
+
+<p>
+  <img src="assets/alo-streak.svg" alt="Streak and consistency" />
+</p>
+
+<p>
+  <img src="assets/alo-roadmap.svg" alt="Roadmap completion" />
+</p>
+"""
+
     content = f"""# Learning Workspace: {subject}
 
 A local ALO learning workspace for tracking roadmap, practice, reviews, and progress.
-
+{charts_section}
 ## Current Snapshot
 
 | Metric | Value |
@@ -153,6 +175,7 @@ def write_workspace_readme(
     *,
     output_path: Path | None = None,
     force: bool = False,
+    include_charts: bool = False,
 ) -> ReadmeWriteResult:
     if is_alo_source_repo(workspace_path):
         return ReadmeWriteResult(
@@ -173,6 +196,9 @@ def write_workspace_readme(
 
     target_path = output_path if output_path else workspace_path / "README.md"
     
+    # Pre-flight check for charts
+    from alo.services.chart_service import write_workspace_charts, generate_workspace_charts
+    
     if target_path.exists() and not force:
         return ReadmeWriteResult(
             written=False,
@@ -181,10 +207,25 @@ def write_workspace_readme(
             warnings=[]
         )
 
-    content = generate_workspace_readme(workspace_path)
+    if include_charts and not force:
+        charts_data = generate_workspace_charts(workspace_path)
+        for name in charts_data.keys():
+            if (workspace_path / "assets" / name).exists():
+                return ReadmeWriteResult(
+                    written=False,
+                    path=str(target_path),
+                    message=f"Chart asset {name} already exists. Use --force to overwrite.",
+                    warnings=[]
+                )
+
+    content = generate_workspace_readme(workspace_path, include_charts=include_charts)
     
     try:
         markdown_store.write_text_safely(target_path, content)
+        
+        if include_charts:
+            write_workspace_charts(workspace_path, force=force)
+            
         return ReadmeWriteResult(
             written=True,
             path=str(target_path),

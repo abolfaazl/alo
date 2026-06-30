@@ -88,6 +88,18 @@ def test_cli_dry_run(tmp_path, monkeypatch):
     assert "Learning Workspace: CLI Test" in res.stdout
     assert not (tmp_path / "README.md").exists()
 
+def test_cli_dry_run_with_charts(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "learning-profile.md").write_text("Subject: CLI Test")
+    
+    res = runner.invoke(app, ["readme", "--include-charts", "--dry-run"])
+    assert res.exit_code == 0
+    assert "Learning Workspace: CLI Test" in res.stdout
+    assert "assets/alo-progress.svg" in res.stdout
+    assert "Charts that would be generated:" in res.stdout
+    assert not (tmp_path / "README.md").exists()
+    assert not (tmp_path / "assets").exists()
+
 def test_cli_command(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "learning-profile.md").write_text("Subject: CLI Run Test")
@@ -98,11 +110,34 @@ def test_cli_command(tmp_path, monkeypatch):
     
     assert (tmp_path / "README.md").exists()
 
+def test_cli_command_with_charts(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "learning-profile.md").write_text("Subject: CLI Run Test")
+    
+    res = runner.invoke(app, ["readme", "--include-charts"])
+    assert res.exit_code == 0
+    assert "Successfully generated workspace README" in res.stdout
+    
+    assert (tmp_path / "README.md").exists()
+    assert (tmp_path / "assets" / "alo-streak.svg").exists()
+    content = (tmp_path / "README.md").read_text()
+    assert "assets/alo-streak.svg" in content
+
+def test_readme_with_charts_does_not_overwrite_existing_assets(tmp_path):
+    (tmp_path / "learning-profile.md").write_text("Subject: Math")
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "assets" / "alo-streak.svg").write_text("OLD CONTENT")
+    
+    result = write_workspace_readme(tmp_path, include_charts=True)
+    assert result.written is False
+    assert "Chart asset alo-streak.svg already exists" in result.message
+    assert not (tmp_path / "README.md").exists()
+
 def test_no_gamification_claims(tmp_path):
     (tmp_path / "learning-profile.md").write_text("Subject: No Claims")
-    content = generate_workspace_readme(tmp_path)
+    content = generate_workspace_readme(tmp_path, include_charts=True)
     content_lower = content.lower()
     
     assert "badge" not in content_lower
     assert "gamification" not in content_lower
-    assert "chart" not in content_lower
+

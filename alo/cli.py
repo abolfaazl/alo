@@ -495,7 +495,8 @@ def review(
 def readme(
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview generated README without writing"),
     force: bool = typer.Option(False, "--force", help="Overwrite existing README.md"),
-    output: Path = typer.Option(None, "--output", help="Optional output path")
+    output: Path = typer.Option(None, "--output", help="Optional output path"),
+    include_charts: bool = typer.Option(False, "--include-charts", help="Generate and embed local progress SVGs")
 ):
     """Generate a learning workspace README."""
     cwd = Path.cwd()
@@ -510,11 +511,18 @@ def readme(
             console.print("[red]Not an ALO workspace. Run `alo init` first.[/red]")
             raise typer.Exit(1)
             
-        content = generate_workspace_readme(cwd)
+        content = generate_workspace_readme(cwd, include_charts=include_charts)
         console.print(content)
+        
+        if include_charts:
+            from alo.services.chart_service import generate_workspace_charts
+            charts_data = generate_workspace_charts(cwd)
+            console.print("\n[yellow]Charts that would be generated:[/yellow]")
+            for name in charts_data.keys():
+                console.print(f"  - assets/{name}")
         return
 
-    result = write_workspace_readme(cwd, output_path=output, force=force)
+    result = write_workspace_readme(cwd, output_path=output, force=force, include_charts=include_charts)
     
     if not result.written:
         if "already exists" in result.message:

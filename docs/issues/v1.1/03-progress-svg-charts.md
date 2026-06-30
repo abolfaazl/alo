@@ -36,3 +36,4 @@ P1
 
 ## Implementation Note
 Implemented in Phase 17.
+Integrated into generated READMEs in Phase 17.5.
