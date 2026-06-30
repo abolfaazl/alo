@@ -458,12 +458,17 @@ def learn(
             console.print("\n[yellow]State not updated (dry run).[/yellow]")
     else:
         # Multi-item flow
-        passed = 0
-        failed = 0
+        from alo.services.practice_session_service import PracticeItemResult, summarize_practice_results
+        item_results = []
         console.print(f"[bold magenta]Multi-part Practice ({len(items)} items)[/bold magenta]")
+        
+        preamble = items[0].prompt.replace("\n\n" + items[0].display_prompt, "")
+        if preamble != items[0].prompt:
+            console.print(Panel(preamble, title="Practice Instructions", style="blue"))
+
         for idx, item_obj in enumerate(items):
             console.print(f"\n[bold green]Practice Question {idx+1} / {len(items)}[/bold green]")
-            console.print(Panel(item_obj.prompt, style="green"))
+            console.print(Panel(item_obj.display_prompt, style="green"))
             
             answer = Prompt.ask("Your answer")
             if not answer.strip():
@@ -488,11 +493,13 @@ def learn(
                 continue
                 
             evaluation = eval_res.evaluation
+            item_results.append(
+                PracticeItemResult(index=idx+1, result=evaluation.result, score=evaluation.score)
+            )
+            
             if evaluation.result == "pass":
-                passed += 1
                 eval_color = "green"
             else:
-                failed += 1
                 eval_color = "yellow" if evaluation.result == "partial" else "red"
                 
             console.print(Panel(f"Result: {evaluation.result.upper()} (Score: {evaluation.score})", style=eval_color))
@@ -501,7 +508,15 @@ def learn(
             # Show correct answer if failed and available in mock/etc, but LLM usually includes it in feedback.
             # We don't have a rigid expected_answer field natively in the Evaluation schema. The prompt feedback is enough.
 
-        console.print(Panel(f"Practice Complete\nScore: {passed} / {len(items)}\nPassed: {passed}\nFailed: {failed}", title="Summary", style="blue"))
+        summary = summarize_practice_results(item_results)
+        summary_text = (
+            f"Items: {summary.total_items}\n"
+            f"Passed: {summary.passed}\n"
+            f"Partial: {summary.partial}\n"
+            f"Failed: {summary.failed}\n"
+            f"Average Score: {summary.average_score}"
+        )
+        console.print(Panel(summary_text, title="Practice Complete", style="blue"))
 
 
 @app.command()

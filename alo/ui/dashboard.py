@@ -1299,12 +1299,15 @@ class DashboardScreen(Screen):
             "dry_run": dry_run,
             "items": items,
             "current_index": 0,
-            "passed": 0,
-            "failed": 0
+            "item_results": []
         }
         
         if len(items) > 1:
             log.write(f"\n[bold magenta]Multi-part Practice ({len(items)} items)[/bold magenta]")
+            # Assuming prompt starts with preamble, we can extract the part that's not display_prompt
+            preamble = items[0].prompt.replace("\n\n" + items[0].display_prompt, "")
+            if preamble != items[0].prompt:
+                log.write(Panel(preamble, title="Practice Instructions", style="blue"))
             
         self._show_next_practice_item(log)
 
@@ -1314,16 +1317,24 @@ class DashboardScreen(Screen):
         if idx >= len(items):
             self.app_state = "idle"
             self.reset_input_prompt()
-            passed = self.state_data.get("passed", 0)
-            failed = self.state_data.get("failed", 0)
             if len(items) > 1:
-                log.write(Panel(f"Practice Complete\nScore: {passed} / {len(items)}\nPassed: {passed}\nFailed: {failed}", title="Summary", style="blue"))
+                from alo.services.practice_session_service import summarize_practice_results
+                summary = summarize_practice_results(self.state_data.get("item_results", []))
+                
+                summary_text = (
+                    f"Items: {summary.total_items}\n"
+                    f"Passed: {summary.passed}\n"
+                    f"Partial: {summary.partial}\n"
+                    f"Failed: {summary.failed}\n"
+                    f"Average Score: {summary.average_score}"
+                )
+                log.write(Panel(summary_text, title="Practice Complete", style="blue"))
             return
             
         item = items[idx]
         if len(items) > 1:
             log.write(f"\n[bold green]Practice Question {idx+1} / {len(items)}[/bold green]")
-        log.write(Panel(item.prompt, title="Practice Question" if len(items) == 1 else None, style="green"))
+        log.write(Panel(item.display_prompt, title="Practice Question" if len(items) == 1 else None, style="green"))
         log.write("\n[yellow]Type your answer and press Enter.[/yellow]")
         
         self.app_state = "learn_answering"
@@ -1350,11 +1361,16 @@ class DashboardScreen(Screen):
             self.state_data["session_ctx"].session.practice_question = self.state_data["original_practice_question"]
             
         evaluation = res.evaluation
+        from alo.services.practice_session_service import PracticeItemResult
+        
+        idx = self.state_data.get("current_index", 0)
+        self.state_data.setdefault("item_results", []).append(
+            PracticeItemResult(index=idx+1, result=evaluation.result, score=evaluation.score)
+        )
+        
         if evaluation.result == "pass":
-            self.state_data["passed"] = self.state_data.get("passed", 0) + 1
             eval_color = "green"
         else:
-            self.state_data["failed"] = self.state_data.get("failed", 0) + 1
             eval_color = "yellow" if evaluation.result == "partial" else "red"
             
         log.write(Panel(f"Result: {evaluation.result.upper()} (Score: {evaluation.score})", style=eval_color))
