@@ -525,5 +525,43 @@ def readme(
     else:
         console.print(f"[green]{result.message}[/green]")
 
+@app.command(name="charts")
+def charts(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview generated charts without writing"),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing SVG files"),
+    output_dir: Path = typer.Option(None, "--output-dir", help="Optional output directory inside workspace")
+):
+    """Generate local SVG progress charts."""
+    cwd = Path.cwd()
+    from alo.services.chart_service import write_workspace_charts, generate_workspace_charts
+    
+    if dry_run:
+        from alo.services.git_service import is_alo_source_repo
+        if is_alo_source_repo(cwd):
+            console.print("[red]Cannot generate charts in the ALO source repository.[/red]")
+            raise typer.Exit(1)
+        if not (cwd / "learning-profile.md").exists():
+            console.print("[red]Not an ALO workspace. Run `alo init` first.[/red]")
+            raise typer.Exit(1)
+            
+        charts_data = generate_workspace_charts(cwd)
+        console.print("[yellow]Dry run. Planned files:[/yellow]")
+        for name in charts_data.keys():
+            console.print(f"  - {name}")
+        return
+
+    result = write_workspace_charts(cwd, output_dir=output_dir, force=force)
+    
+    if not result.written:
+        if "already exists" in result.message:
+            console.print(f"[yellow]{result.message}[/yellow]")
+        else:
+            console.print(f"[red]{result.message}[/red]")
+            raise typer.Exit(1)
+    else:
+        console.print(f"[green]{result.message}[/green]")
+        for f in result.files:
+            console.print(f"  - {f}")
+
 if __name__ == "__main__":
     app()

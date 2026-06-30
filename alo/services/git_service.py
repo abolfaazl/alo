@@ -14,7 +14,11 @@ ALLOWED_SYNC_FILES = [
     "progress-log.md",
     "tutor-rules.md",
     "privacy-rules.md",
-    ".gitignore"
+    ".gitignore",
+    "assets/alo-progress.svg",
+    "assets/alo-practice.svg",
+    "assets/alo-streak.svg",
+    "assets/alo-roadmap.svg"
 ]
 
 SECRET_PATTERNS = [
@@ -99,7 +103,7 @@ def get_pre_staged_unsafe_files(path: Path) -> List[str]:
 
 def get_changed_files(path: Path) -> Tuple[List[str], List[str]]:
     """Returns (allowed_changed_files, ignored_changed_files)."""
-    res = run_cmd(["git", "status", "--porcelain"], cwd=path, check=False)
+    res = run_cmd(["git", "status", "--porcelain", "-uall"], cwd=path, check=False)
     if res.returncode != 0:
         return [], []
     

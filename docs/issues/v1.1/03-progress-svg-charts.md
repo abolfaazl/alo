@@ -33,3 +33,6 @@ Implement SVG chart generation derived purely from local stats to enrich the gen
 
 ## Priority
 P1
+
+## Implementation Note
+Implemented in Phase 17.
