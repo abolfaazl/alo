@@ -622,6 +622,7 @@ def readme(
         console.print("[green]Generated 4 SVG charts in assets/[/green]")
 
 @app.command(name="badges")
+@app.command(name="badge", hidden=True)
 def badges():
     """View local gamification summary and badges."""
     cwd = Path.cwd()

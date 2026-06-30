@@ -60,31 +60,8 @@ class DashboardScreen(Screen):
                             yield LoadingIndicator(id="loading-indicator", classes="hidden")
                 
                 with Vertical(id="sidebar"):
-                    if self.is_workspace:
-                        yield Label("Workspace", classes="sidebar-title")
-                        yield Label(views.truncate_middle(self.workspace_info.get("cwd", ""), 30), classes="sidebar-text")
-                        yield Static("", classes="spacer")
-                        yield Label("Subject", classes="sidebar-title")
-                        yield Label(self.workspace_info.get("subject", ""), classes="sidebar-text")
-                        yield Static("", classes="spacer")
-                        yield Label("Active Path", classes="sidebar-title")
-                        yield Label(self.workspace_info.get("active_path", ""), classes="sidebar-text")
-                        yield Static("", classes="spacer")
-                        yield Label("Roadmap Status", classes="sidebar-title")
-                        yield Label(f"{self.workspace_info.get('rm_items', 0)} items pending", classes="sidebar-text")
-                        yield Static("", classes="spacer")
-                        yield Label("LLM Config", classes="sidebar-title")
-                        yield Label(self.workspace_info.get("cfg_status", ""), classes="sidebar-text")
-                        yield Static("", classes="spacer")
-                        yield Label("Git Status", classes="sidebar-title")
-                        yield Label(self.workspace_info.get("git_status", "Not tracked"), classes="sidebar-text")
-                    else:
-                        yield Label("Workspace", classes="sidebar-title")
-                        yield Label("Not Initialized", classes="sidebar-text", id="uninitialized-warning")
-                    
-                    with Vertical(id="sidebar-footer"):
-                        yield Label("/*", classes="sidebar-text")
-                        yield Label("• ALO 1.0.0", classes="sidebar-text")
+                    yield from self._build_sidebar_widgets()
+
 
     def on_mount(self) -> None:
         self.query_one("#chat-input", Input).focus()
@@ -284,7 +261,13 @@ class DashboardScreen(Screen):
             else:
                 log.write(Panel("Not initialized.", border_style="yellow"))
         elif cmd == "status":
-            log.write(views.build_status_view(cwd))
+            self.run_status_cmd(args[1:], log, cwd)
+        elif cmd == "readme":
+            self.run_readme_cmd(args[1:], log, cwd)
+        elif cmd == "charts":
+            self.run_charts_cmd(args[1:], log, cwd)
+        elif cmd in ["badges", "badge"]:
+            self.run_badges_cmd(args[1:], log, cwd)
         elif cmd == "doctor":
             log.write(views.build_doctor_view(cwd))
         elif cmd == "help":
@@ -760,6 +743,8 @@ class DashboardScreen(Screen):
         parser.add_argument("--yes", action="store_true")
         parser.add_argument("--item", type=str)
         parser.add_argument("--weakness", type=str)
+        parser.add_argument("--include-charts", action="store_true")
+        parser.add_argument("--include-gamification", action="store_true")
         try:
             return parser.parse_known_args(args)[0]
         except SystemExit:
@@ -976,34 +961,81 @@ class DashboardScreen(Screen):
             self.update_input_prompt("Assessment skipped. Generate learning paths from self-report now?", "Guided Flow")
             self.show_choices("Generate learning paths?", ["yes", "no"])
         
-    def _refresh_sidebar(self, sidebar, cwd):
+    def _build_sidebar_widgets(self):
         from textual.widgets import Label, Static
+        from textual.containers import Vertical
+        from alo import __version__
+        from alo.services.status_service import compute_workspace_status
+        from alo.ui import views
+        
+        cwd = Path.cwd()
+        status = compute_workspace_status(cwd)
         from alo import state_manager
-        
         lp = state_manager.get_active_learning_path(cwd)
-        rm_items = state_manager.get_roadmap_review_targets(cwd)
-        cfg_status = "present" if alo_config.config_exists() else "missing"
+        active_path_title = lp["title"] if lp else "None"
         
-        sidebar.mount(
-            Label("Workspace", classes="sidebar-title"),
-            Label(str(cwd), classes="sidebar-text"),
-            Static("", classes="spacer"),
-            Label("Subject", classes="sidebar-title"),
-            Label(self.state_data.get("init", {}).get("subject", self.workspace_info.get("subject", "")), classes="sidebar-text"),
-            Static("", classes="spacer"),
-            Label("Active Path", classes="sidebar-title"),
-            Label(lp["title"] if lp else "None", classes="sidebar-text"),
-            Static("", classes="spacer"),
-            Label("Roadmap Status", classes="sidebar-title"),
-            Label(f"{len(rm_items) if rm_items else 0} items pending", classes="sidebar-text"),
-            Static("", classes="spacer"),
-            Label("LLM Config", classes="sidebar-title"),
-            Label(cfg_status, classes="sidebar-text"),
-            Vertical(
-                Label("/*", classes="sidebar-text"),
-                Label("• ALO 1.0.0", classes="sidebar-text")
-            )
+        widgets = []
+        if status.is_workspace:
+            widgets.append(Label("Workspace", classes="sidebar-title"))
+            widgets.append(Label(views.truncate_middle(str(cwd), 30), classes="sidebar-text"))
+            widgets.append(Static("", classes="spacer"))
+            
+            widgets.append(Label("Subject", classes="sidebar-title"))
+            widgets.append(Label(status.subject or "None", classes="sidebar-text"))
+            widgets.append(Static("", classes="spacer"))
+            
+            widgets.append(Label("Active Path", classes="sidebar-title"))
+            widgets.append(Label(active_path_title, classes="sidebar-text"))
+            widgets.append(Static("", classes="spacer"))
+            
+            if status.stats:
+                widgets.append(Label("Roadmap Progress", classes="sidebar-title"))
+                widgets.append(Label(f"{status.stats.roadmap_completed_items}/{status.stats.roadmap_total_items} ({status.stats.roadmap_completion_percent}%)", classes="sidebar-text"))
+                widgets.append(Static("", classes="spacer"))
+                
+                widgets.append(Label("Learning Stats", classes="sidebar-title"))
+                widgets.append(Label(f"Lessons: {status.stats.lessons_completed}", classes="sidebar-text"))
+                widgets.append(Label(f"Reviews: {status.stats.reviews_completed}", classes="sidebar-text"))
+                widgets.append(Label(f"Practice: {status.stats.practice_sessions}", classes="sidebar-text"))
+                widgets.append(Label(f"Active days: {status.stats.active_learning_days}", classes="sidebar-text"))
+                widgets.append(Label(f"Current streak: {status.stats.current_streak_days} days", classes="sidebar-text"))
+                widgets.append(Static("", classes="spacer"))
+            
+            if status.gamification:
+                widgets.append(Label("Momentum", classes="sidebar-title"))
+                widgets.append(Label(f"XP: {status.gamification.xp}", classes="sidebar-text"))
+                widgets.append(Label(f"Level: {status.gamification.level}", classes="sidebar-text"))
+                widgets.append(Label(f"Weekly goal: {status.gamification.weekly_goal_progress}/{status.gamification.weekly_goal_target}", classes="sidebar-text"))
+                earned = [b for b in status.gamification.badges if b.earned]
+                widgets.append(Label(f"Earned badges: {len(earned)}", classes="sidebar-text"))
+                widgets.append(Static("", classes="spacer"))
+                
+            if status.portfolio:
+                widgets.append(Label("Portfolio", classes="sidebar-title"))
+                widgets.append(Label(f"README: {'exists' if status.portfolio.readme_exists else 'missing'}", classes="sidebar-text"))
+                widgets.append(Label(f"Charts: {status.portfolio.charts_existing}/{status.portfolio.charts_total}", classes="sidebar-text"))
+                widgets.append(Static("", classes="spacer"))
+                
+            widgets.append(Label("Next Step", classes="sidebar-title"))
+            if status.next_steps:
+                widgets.append(Label(status.next_steps[0], classes="sidebar-text"))
+            
+        else:
+            widgets.append(Label("Workspace", classes="sidebar-title"))
+            widgets.append(Label("Not Initialized", classes="sidebar-text", id="uninitialized-warning"))
+            
+        footer = Vertical(
+            Label("/*", classes="sidebar-text"),
+            Label(f"  ALO {__version__}", classes="sidebar-text")
         )
+        widgets.append(footer)
+        
+        return widgets
+
+    def _refresh_sidebar(self, sidebar, cwd):
+        sidebar.remove_children()
+        widgets = self._build_sidebar_widgets()
+        sidebar.mount(*widgets)
 
     def run_roadmap_flow(self, args, log, cwd):
         parsed = self._parse_args(args, log)
@@ -1385,6 +1417,72 @@ class DashboardScreen(Screen):
             
         if getattr(res, "pushed", False):
             log.write("[green]Pushed to remote.[/green]")
+
+
+    def run_status_cmd(self, args, log, cwd):
+        from alo.services.status_service import compute_workspace_status
+        from textual.widgets import Static
+        from rich.panel import Panel
+        from rich.text import Text
+        
+        status_obj = compute_workspace_status(cwd)
+        
+        if status_obj.is_source_repo:
+            log.write("[red]Cannot run status inside ALO source repository.[/red]")
+            return
+            
+        if not status_obj.is_workspace:
+            log.write("[red]Not an ALO workspace. Run `alo init` first.[/red]")
+            return
+            
+        # Instead of reinventing the rich panel logic, we just run the CLI logic
+        from alo.cli import app
+        from typer.testing import CliRunner
+        runner = CliRunner()
+        res = runner.invoke(app, ["status"])
+        log.write(Text.from_ansi(res.stdout))
+
+    def run_readme_cmd(self, args, log, cwd):
+        parsed = self._parse_args(args, log)
+        if not parsed:
+            return
+            
+        from alo.cli import app
+        from typer.testing import CliRunner
+        runner = CliRunner()
+        cmd_args = ["readme"]
+        if parsed.include_charts: cmd_args.append("--include-charts")
+        if parsed.include_gamification: cmd_args.append("--include-gamification")
+        if parsed.force: cmd_args.append("--force")
+        if parsed.dry_run: cmd_args.append("--dry-run")
+        
+        res = runner.invoke(app, cmd_args)
+        log.write(Text.from_ansi(res.stdout))
+        self._refresh_sidebar(self.query_one("#sidebar"), cwd)
+
+    def run_charts_cmd(self, args, log, cwd):
+        parsed = self._parse_args(args, log)
+        if not parsed:
+            return
+            
+        from alo.cli import app
+        from typer.testing import CliRunner
+        runner = CliRunner()
+        cmd_args = ["charts"]
+        if parsed.force: cmd_args.append("--force")
+        if parsed.dry_run: cmd_args.append("--dry-run")
+        
+        res = runner.invoke(app, cmd_args)
+        log.write(Text.from_ansi(res.stdout))
+        self._refresh_sidebar(self.query_one("#sidebar"), cwd)
+
+    def run_badges_cmd(self, args, log, cwd):
+        from alo.cli import app
+        from typer.testing import CliRunner
+        runner = CliRunner()
+        res = runner.invoke(app, ["badges"])
+        log.write(Text.from_ansi(res.stdout))
+
 
 class AloApp(App[None]):
     CSS_PATH = "mimo.css"

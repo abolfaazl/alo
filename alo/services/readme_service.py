@@ -103,21 +103,10 @@ def generate_workspace_readme(workspace_path: Path, *, include_charts: bool = Fa
         charts_section = """
 ## Progress Overview
 
-<p>
-  <img src="assets/alo-progress.svg" alt="Learning progress" />
-</p>
-
-<p>
-  <img src="assets/alo-practice.svg" alt="Practice volume" />
-</p>
-
-<p>
-  <img src="assets/alo-streak.svg" alt="Streak and consistency" />
-</p>
-
-<p>
-  <img src="assets/alo-roadmap.svg" alt="Roadmap completion" />
-</p>
+<img src="assets/alo-progress.svg" alt="Learning progress" />
+<img src="assets/alo-practice.svg" alt="Practice volume" />
+<img src="assets/alo-streak.svg" alt="Streak and consistency" />
+<img src="assets/alo-roadmap.svg" alt="Roadmap completion" />
 """
 
     gamification_section = ""
