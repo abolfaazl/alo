@@ -47,7 +47,7 @@ class AloConfig(BaseModel):
             self.llm_provider = "openai-compatible"
             
         if self.llm_provider == "openai-compatible" and not self.base_url:
-            raise ValueError("base_url is required when llm_provider is openai-compatible")
+            pass # Removed ValueError to allow saving incomplete configs
             
         # Avoid conflicting state
         if self.api_key_storage == "keyring":

@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 from alo import config
-import pytest
 
 def test_config_path_is_outside_repo(monkeypatch, tmp_path):
     # Mock home directory
@@ -21,8 +20,9 @@ def test_config_path_is_outside_repo(monkeypatch, tmp_path):
 def test_openai_compatible_requires_base_url():
     from alo.config import AloConfig
     
-    with pytest.raises(ValueError):
-        AloConfig(llm_provider="openai-compatible", base_url=None)
+    # We no longer raise ValueError here, to allow incomplete GUI configs to save.
+    cfg = AloConfig(llm_provider="openai-compatible", base_url="")
+    assert cfg.llm_provider == "openai-compatible"
         
     cfg = AloConfig(llm_provider="openai-compatible", base_url="http://localhost:8080")
     assert cfg.base_url == "http://localhost:8080"

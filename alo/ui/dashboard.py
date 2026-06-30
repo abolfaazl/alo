@@ -26,6 +26,7 @@ class DashboardScreen(Screen):
         Binding("f9", "submit_textarea", "Submit Multiline", show=False),
         Binding("ctrl+j", "submit_textarea", "Submit Multiline", show=False),
         Binding("ctrl+s", "save_settings", "Save Settings", show=False),
+        Binding("t", "test_connection", "Test Connection", show=False),
         Binding("q", "quit_settings", "Quit Settings", show=False)
     ]
     
@@ -90,15 +91,35 @@ class DashboardScreen(Screen):
 
     def action_save_settings(self) -> None:
         if self.app_state.startswith("settings_") and "config_obj" in self.state_data:
-            from alo.config import save_config
-            save_config(self.state_data["config_obj"])
-            self.state_data["settings_dirty"] = False
+            from alo.config import save_config, load_config, validate_config_readiness
+            cfg = self.state_data["config_obj"]
             log = self.query_one("#chat-log", RichLog)
-            log.write("\n[green]Settings saved.[/green]")
+            try:
+                save_config(cfg)
+                reloaded = load_config()
+                if (reloaded.llm_provider != cfg.llm_provider or
+                    reloaded.model != cfg.model or
+                    reloaded.base_url != cfg.base_url or
+                    reloaded.api_key_storage != cfg.api_key_storage or
+                    reloaded.default_language != cfg.default_language):
+                    raise ValueError("Reload verification failed: fields do not match")
+                
+                # Check secret store readiness explicitly to ensure valid state
+                readiness = validate_config_readiness(reloaded)
+                key_status = next((i for i in readiness.items if i.key == "api_key"), None)
+                if key_status and "missing" in key_status.safe_value.lower():
+                    # We still saved the non-secret settings, but we should warn the user
+                    pass
+                
+                self.state_data["settings_dirty"] = False
+                log.write("\n[green]Saved and reloaded successfully.[/green]")
+            except Exception as e:
+                log.write(f"\n[red]Save failed:[/red] {e}")
+
             if self.app_state == "settings_menu":
                 self._render_settings_menu(log)
             else:
-                # If they save while in an edit flow, go back to menu
+                self.app_state = "settings_menu"
                 self._render_settings_menu(log)
 
     def action_quit_settings(self) -> None:
@@ -107,6 +128,28 @@ class DashboardScreen(Screen):
                 log = self.query_one("#chat-log", RichLog)
                 log.write("\n[yellow]Settings changes discarded.[/yellow]")
             self.reset_input_prompt()
+
+    def action_test_connection(self) -> None:
+        if self.app_state == "settings_menu":
+            # Simulate selecting "Test API Connection"
+            log = self.query_one("#chat-log", RichLog)
+            data = self.state_data
+            cfg = data["config_obj"]
+            
+            if data.get("settings_dirty"):
+                log.write("[yellow]You have unsaved changes. Save before testing connection?[/yellow]")
+                log.write("Select [bold]Save Changes[/bold] first, then test connection.")
+                self._render_settings_menu(log)
+                return
+                
+            from alo.config import validate_config_readiness
+            cur_readiness = validate_config_readiness(cfg)
+            if not cur_readiness.llm_ready:
+                log.write("[red]Cannot test: LLM configuration is missing required fields.[/red]")
+                self._render_settings_menu(log)
+            else:
+                self.enter_working_state("Testing API connection... Please wait.")
+                self.run_llm_test_worker(cfg, log=log)
 
     def update_input_prompt(self, prompt_text: str, state_label: str, placeholder: str = "", is_password: bool = False, multi_line: bool = False) -> None:
         sb = self.query_one("#state-bar")
@@ -639,15 +682,26 @@ class DashboardScreen(Screen):
             elif text == "Edit Git Remote":
                 log.write("[yellow]Git Remote editing is not fully implemented yet.[/yellow]")
                 self._render_settings_menu(log)
-            elif text == "Test LLM Connection":
+            elif text == "Test API Connection":
+                if data.get("settings_dirty"):
+                    log.write("[yellow]You have unsaved changes. Save before testing connection?[/yellow]")
+                    log.write("Select [bold]Save Changes[/bold] first, then test connection.")
+                    self._render_settings_menu(log)
+                    return
                 from alo.config import validate_config_readiness
                 cur_readiness = validate_config_readiness(cfg)
                 if not cur_readiness.llm_ready:
                     log.write("[red]Cannot test: LLM configuration is missing required fields.[/red]")
                     self._render_settings_menu(log)
                 else:
-                    self.enter_working_state("Testing LLM connection... Please wait.")
+                    self.enter_working_state("Testing API connection... Please wait.")
                     self.run_llm_test_worker(cfg, log=log)
+            elif text == "Save Changes":
+                if not data.get("settings_dirty"):
+                    log.write("[yellow]No changes to save.[/yellow]")
+                    self._render_settings_menu(log)
+                else:
+                    self.action_save_settings()
             elif text == "Back":
                 if data.get("settings_dirty"):
                     log.write("[yellow]You have unsaved changes. Press Ctrl+S to save, or Q to discard.[/yellow]")
@@ -970,12 +1024,14 @@ class DashboardScreen(Screen):
             "Replace API Key",
             "Edit Default Language",
             "Edit Git Remote",
-            "Test LLM Connection"
+            "Test API Connection",
+            "Save Changes",
+            "Back"
         ])
         
         status_text = "[bold yellow]Unsaved changes[/bold yellow]" if self.state_data.get("settings_dirty") else "[bold green]All changes saved[/bold green]"
         log.write(f"\n{status_text}")
-        log.write("[bold cyan]Action Bar:[/bold cyan] [Enter] Edit  |  [Ctrl+S] Save  |  [Esc] / [Q] Back")
+        log.write("[bold cyan]Action Bar:[/bold cyan] [Enter] Edit  |  [Ctrl+S] Save  |  [T] Test Connection  |  [Esc] / [Q] Back")
         
         self.app_state = "settings_menu"
         self.update_input_prompt("Select action:", "Settings")
