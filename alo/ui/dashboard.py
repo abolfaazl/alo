@@ -24,7 +24,9 @@ class DashboardScreen(Screen):
         Binding("ctrl+x", "toggle_sidebar", "Toggle Sidebar", show=False),
         Binding("escape", "cancel", "Cancel Operation", show=False),
         Binding("f9", "submit_textarea", "Submit Multiline", show=False),
-        Binding("ctrl+j", "submit_textarea", "Submit Multiline", show=False)
+        Binding("ctrl+j", "submit_textarea", "Submit Multiline", show=False),
+        Binding("ctrl+s", "save_settings", "Save Settings", show=False),
+        Binding("q", "quit_settings", "Quit Settings", show=False)
     ]
     
     def __init__(self, is_workspace: bool, workspace_info: dict, **kwargs):
@@ -77,10 +79,34 @@ class DashboardScreen(Screen):
             ))
 
     def action_cancel(self) -> None:
+        if self.app_state == "settings_menu":
+            self.action_quit_settings()
+            return
+            
         if self.app_state != "idle":
             self.reset_input_prompt()
             log = self.query_one("#chat-log", RichLog)
             log.write("[yellow]Operation cancelled.[/yellow]")
+
+    def action_save_settings(self) -> None:
+        if self.app_state.startswith("settings_") and "config_obj" in self.state_data:
+            from alo.config import save_config
+            save_config(self.state_data["config_obj"])
+            self.state_data["settings_dirty"] = False
+            log = self.query_one("#chat-log", RichLog)
+            log.write("\n[green]Settings saved.[/green]")
+            if self.app_state == "settings_menu":
+                self._render_settings_menu(log)
+            else:
+                # If they save while in an edit flow, go back to menu
+                self._render_settings_menu(log)
+
+    def action_quit_settings(self) -> None:
+        if self.app_state.startswith("settings_"):
+            if self.state_data.get("settings_dirty"):
+                log = self.query_one("#chat-log", RichLog)
+                log.write("\n[yellow]Settings changes discarded.[/yellow]")
+            self.reset_input_prompt()
 
     def update_input_prompt(self, prompt_text: str, state_label: str, placeholder: str = "", is_password: bool = False, multi_line: bool = False) -> None:
         sb = self.query_one("#state-bar")
@@ -216,6 +242,10 @@ class DashboardScreen(Screen):
             return
 
         if not cmd_raw:
+            return
+            
+        if cmd_raw.endswith("\\"):
+            log.write("[red]Invalid command syntax. Do not use a trailing backslash in ALO commands.[/red]")
             return
             
         log.write(f"\n> {format_mixed_text_for_display(cmd_raw)}")
@@ -564,7 +594,6 @@ class DashboardScreen(Screen):
             log.write(f"Remote URL: {self.state_data['init']['remote_url']}")
             self.finish_init_flow(log, cwd)            
         elif state == "settings_menu":
-            from alo.config import save_config
             cfg = data["config_obj"]
             readiness = data.get("readiness")
             text = text.strip()
@@ -574,7 +603,6 @@ class DashboardScreen(Screen):
                     log.write("[yellow]No missing required settings![/yellow]")
                     self._render_settings_menu(log)
                     return
-                # Map the next required key to an edit action string
                 mapping = {
                     "llm_provider": "Edit LLM Provider",
                     "model": "Edit Model",
@@ -615,19 +643,16 @@ class DashboardScreen(Screen):
                 from alo.config import validate_config_readiness
                 cur_readiness = validate_config_readiness(cfg)
                 if not cur_readiness.llm_ready:
-                    log.write("[red]Cannot test connection. Config is incomplete.[/red]")
+                    log.write("[red]Cannot test: LLM configuration is missing required fields.[/red]")
                     self._render_settings_menu(log)
                 else:
-                    self.enter_working_state("Testing connection... Please wait.")
-                    self.run_llm_test_worker(cfg, log)
+                    self.enter_working_state("Testing LLM connection... Please wait.")
+                    self.run_llm_test_worker(cfg, log=log)
             elif text == "Back":
-                save_config(cfg)
-                log.write("[green]Settings saved.[/green]")
-                pending = data.get("pending_guided_action")
-                if pending:
-                    self.resume_guided_action(pending, log)
+                if data.get("settings_dirty"):
+                    log.write("[yellow]You have unsaved changes. Press Ctrl+S to save, or Q to discard.[/yellow]")
+                    self._render_settings_menu(log)
                 else:
-                    self.app_state = "idle"
                     self.reset_input_prompt()
             else:
                 log.write("[red]Unknown option.[/red]")
@@ -635,19 +660,19 @@ class DashboardScreen(Screen):
                 
         elif state == "settings_edit_provider":
             data["config_obj"].llm_provider = text.strip()
+            data["settings_dirty"] = True
             self._render_settings_menu(log)
         elif state == "settings_edit_model":
             data["config_obj"].model = text.strip()
+            data["settings_dirty"] = True
             self._render_settings_menu(log)
         elif state == "settings_edit_base_url":
             data["config_obj"].base_url = text.strip() or None
+            data["settings_dirty"] = True
             self._render_settings_menu(log)
         elif state == "settings_edit_key_storage":
-            mode = text.strip().lower()
-            if mode in ["keyring", "env"]:
-                data["config_obj"].api_key_storage = mode
-                if mode == "env" and not data["config_obj"].api_key_env_var:
-                    data["config_obj"].api_key_env_var = "OPENAI_API_KEY"
+            data["config_obj"].api_key_storage = text.strip()
+            data["settings_dirty"] = True
             self._render_settings_menu(log)
         elif state == "settings_edit_api_key_raw":
             raw_key = text.strip()
@@ -658,22 +683,27 @@ class DashboardScreen(Screen):
                     keyring.set_password("alo", key_name, raw_key)
                     data["config_obj"].api_key_name = key_name
                     data["config_obj"].api_key_env_var = None
-                    log.write("[green]API Key saved securely.[/green]")
+                    log.write("[green]API Key saved securely to keyring.[/green]")
                 except Exception as e:
                     log.write(f"[red]Failed to save to keyring: {e}[/red]")
+            data["settings_dirty"] = True
             self._render_settings_menu(log)
         elif state == "settings_edit_api_key_env_var":
             data["config_obj"].api_key_env_var = text.strip() or "OPENAI_API_KEY"
             data["config_obj"].api_key_name = None
+            data["settings_dirty"] = True
             self._render_settings_menu(log)
         elif state == "settings_edit_language":
             data["config_obj"].default_language = text.strip() or "en"
+            data["settings_dirty"] = True
             self._render_settings_menu(log)
         elif state == "settings_edit_safe_mode":
             data["config_obj"].safe_mode = (text.strip().lower() == "yes")
+            data["settings_dirty"] = True
             self._render_settings_menu(log)
         elif state == "settings_edit_auto_push":
             data["config_obj"].auto_push = (text.strip().lower() == "yes")
+            data["settings_dirty"] = True
             self._render_settings_menu(log)
             
         elif state == "learn_answering":
@@ -681,6 +711,16 @@ class DashboardScreen(Screen):
                 log.write("[red]Your answer cannot be empty.[/red]")
                 return
             self.enter_working_state("Evaluating answer... Please wait.")
+            
+            idx = data.get("current_index", 0)
+            items = data.get("items", [])
+            
+            if items:
+                item = items[idx]
+                original_question = data["session_ctx"].session.practice_question
+                data["session_ctx"].session.practice_question = item.prompt
+                data["original_practice_question"] = original_question
+                
             self.run_learn_evaluate_worker(cwd, data["session_ctx"], text, mock=data["mock"], dry_run=data["dry_run"], log=log)
             
         elif state == "assess_answering":
@@ -735,8 +775,8 @@ class DashboardScreen(Screen):
             log.write(f"\n❌ [red]Test failed:[/red] {res.error}")
         self._render_settings_menu(log)
 
-    def _parse_args(self, args, log):
-        parser = argparse.ArgumentParser(add_help=False)
+    def _parse_args(self, cmd_name, args, log):
+        parser = argparse.ArgumentParser(prog=cmd_name, add_help=False)
         parser.add_argument("--mock", action="store_true")
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--force", action="store_true")
@@ -745,8 +785,40 @@ class DashboardScreen(Screen):
         parser.add_argument("--weakness", type=str)
         parser.add_argument("--include-charts", action="store_true")
         parser.add_argument("--include-gamification", action="store_true")
+        
+        valid_flags = {
+            "readme": ["--include-charts", "--include-gamification", "--dry-run", "--force", "--yes"],
+            "charts": ["--dry-run", "--force", "--yes"],
+            "roadmap": ["--mock", "--dry-run", "--force", "--yes"],
+            "paths": ["--mock", "--dry-run", "--force", "--yes"],
+            "learn": ["--mock", "--yes", "--item"],
+            "review": ["--mock", "--yes", "--weakness", "--item"],
+            "sync": ["--dry-run"],
+            "badges": [],
+            "badge": [],
+            "status": [],
+            "assess": ["--mock", "--dry-run", "--yes"],
+        }
+        
+        allowed = valid_flags.get(cmd_name, [])
+        for arg in args:
+            if arg.startswith("--"):
+                if arg not in allowed:
+                    if arg in ["--including-gamification", "--include-gamification"]:
+                        if cmd_name != "readme":
+                            log.write(f"[red]Unknown option for {cmd_name}: {arg}[/red]")
+                            log.write("Try: readme --include-gamification --force")
+                            return None
+                    log.write(f"[red]Unknown option for {cmd_name}: {arg}[/red]")
+                    return None
+                    
         try:
-            return parser.parse_known_args(args)[0]
+            parsed = parser.parse_args(args)
+            if parsed.force and not parsed.yes and cmd_name in ["roadmap", "paths", "readme", "charts"]:
+                log.write(f"[red]Refusing to run `{cmd_name} --force` without confirmation.[/red]")
+                log.write(f"Use `{cmd_name} --force --yes` if you are sure.")
+                return None
+            return parsed
         except SystemExit:
             log.write("[red]Invalid arguments.[/red]")
             return None
@@ -780,7 +852,7 @@ class DashboardScreen(Screen):
         return False
 
     def run_paths_flow(self, args, log, cwd):
-        parsed = self._parse_args(args, log)
+        parsed = self._parse_args('paths', args, log)
         if not parsed:
             return
         if not self._check_llm_readiness("paths generation", log, parsed.mock):
@@ -898,9 +970,12 @@ class DashboardScreen(Screen):
             "Replace API Key",
             "Edit Default Language",
             "Edit Git Remote",
-            "Test LLM Connection",
-            "Back"
+            "Test LLM Connection"
         ])
+        
+        status_text = "[bold yellow]Unsaved changes[/bold yellow]" if self.state_data.get("settings_dirty") else "[bold green]All changes saved[/bold green]"
+        log.write(f"\n{status_text}")
+        log.write("[bold cyan]Action Bar:[/bold cyan] [Enter] Edit  |  [Ctrl+S] Save  |  [Esc] / [Q] Back")
         
         self.app_state = "settings_menu"
         self.update_input_prompt("Select action:", "Settings")
@@ -1071,7 +1146,7 @@ class DashboardScreen(Screen):
         sidebar.mount(*widgets)
 
     def run_roadmap_flow(self, args, log, cwd):
-        parsed = self._parse_args(args, log)
+        parsed = self._parse_args('roadmap', args, log)
         if not parsed:
             return
         if not self._check_llm_readiness("roadmap generation", log, parsed.mock):
@@ -1122,7 +1197,7 @@ class DashboardScreen(Screen):
             self.reset_input_prompt()
 
     def run_learn_flow(self, args, log, cwd):
-        parsed = self._parse_args(args, log)
+        parsed = self._parse_args('learn', args, log)
         if not parsed:
             return
         if not self._check_llm_readiness("learning session generation", log, parsed.mock):
@@ -1158,11 +1233,44 @@ class DashboardScreen(Screen):
         log.write(Markdown(session.example))
         log.write("\n[bold red]Common Mistake:[/bold red]")
         log.write(Markdown(session.common_mistake))
-        log.write(Panel(session.practice_question, title="Practice Question", style="green"))
+        
+        from alo.services.practice_session_service import parse_practice_items
+        items = parse_practice_items(session.practice_question)
+        
+        self.state_data = {
+            "session_ctx": session_ctx,
+            "mock": mock,
+            "dry_run": dry_run,
+            "items": items,
+            "current_index": 0,
+            "passed": 0,
+            "failed": 0
+        }
+        
+        if len(items) > 1:
+            log.write(f"\n[bold magenta]Multi-part Practice ({len(items)} items)[/bold magenta]")
+            
+        self._show_next_practice_item(log)
+
+    def _show_next_practice_item(self, log):
+        idx = self.state_data.get("current_index", 0)
+        items = self.state_data.get("items", [])
+        if idx >= len(items):
+            self.app_state = "idle"
+            self.reset_input_prompt()
+            passed = self.state_data.get("passed", 0)
+            failed = self.state_data.get("failed", 0)
+            if len(items) > 1:
+                log.write(Panel(f"Practice Complete\nScore: {passed} / {len(items)}\nPassed: {passed}\nFailed: {failed}", title="Summary", style="blue"))
+            return
+            
+        item = items[idx]
+        if len(items) > 1:
+            log.write(f"\n[bold green]Practice Question {idx+1} / {len(items)}[/bold green]")
+        log.write(Panel(item.prompt, title="Practice Question" if len(items) == 1 else None, style="green"))
         log.write("\n[yellow]Type your answer and press Enter.[/yellow]")
         
         self.app_state = "learn_answering"
-        self.state_data = {"session_ctx": session_ctx, "mock": mock, "dry_run": dry_run}
         self.update_input_prompt("Type your answer. (Ctrl+Enter to submit, Esc to cancel)", "Answering lesson question", placeholder="Your answer...", multi_line=True)
 
     @work(thread=True)
@@ -1181,24 +1289,37 @@ class DashboardScreen(Screen):
     def _on_learn_evaluated(self, res, dry_run, log):
         if self.handle_worker_error(res, "learn evaluation", log):
             return
-        self.app_state = "idle"
-        self.reset_input_prompt()
-        
+            
+        if "original_practice_question" in self.state_data:
+            self.state_data["session_ctx"].session.practice_question = self.state_data["original_practice_question"]
+            
         evaluation = res.evaluation
-        eval_color = "green" if evaluation.result == "pass" else ("yellow" if evaluation.result == "partial" else "red")
+        if evaluation.result == "pass":
+            self.state_data["passed"] = self.state_data.get("passed", 0) + 1
+            eval_color = "green"
+        else:
+            self.state_data["failed"] = self.state_data.get("failed", 0) + 1
+            eval_color = "yellow" if evaluation.result == "partial" else "red"
+            
         log.write(Panel(f"Result: {evaluation.result.upper()} (Score: {evaluation.score})", style=eval_color))
         log.write(Markdown(evaluation.feedback))
-        log.write(f"\n[bold green]Strengths:[/bold green] {evaluation.strengths}")
-        log.write(f"[bold red]Weaknesses:[/bold red] {evaluation.weaknesses}")
-        log.write(f"[bold cyan]Next Step:[/bold cyan] {evaluation.recommended_next_step}")
         
-        if not dry_run:
-            log.write("\n[green]State updated successfully.[/green]")
+        items = self.state_data.get("items", [])
+        if len(items) <= 1 or self.state_data.get("current_index", 0) == len(items) - 1:
+            log.write(f"\n[bold green]Strengths:[/bold green] {evaluation.strengths}")
+            log.write(f"[bold red]Weaknesses:[/bold red] {evaluation.weaknesses}")
+            log.write(f"[bold cyan]Next Step:[/bold cyan] {evaluation.recommended_next_step}")
+            
+        if "current_index" in self.state_data:
+            self.state_data["current_index"] += 1
+            self.exit_working_state()
+            self._show_next_practice_item(log)
         else:
-            log.write("\n[yellow]State not updated (dry run).[/yellow]")
+            self.app_state = "idle"
+            self.reset_input_prompt()
 
     def run_assess_flow(self, args, log, cwd):
-        parsed = self._parse_args(args, log)
+        parsed = self._parse_args('assess', args, log)
         if not parsed:
             return
         if not self._check_llm_readiness("assessment generation", log, parsed.mock):
@@ -1249,7 +1370,7 @@ class DashboardScreen(Screen):
         self.show_choices("Select an answer:", q.choices)
 
     def run_review_flow(self, args, log, cwd):
-        parsed = self._parse_args(args, log)
+        parsed = self._parse_args('review', args, log)
         if not parsed:
             return
         if not self._check_llm_readiness("review generation", log, parsed.mock):
@@ -1474,7 +1595,7 @@ class DashboardScreen(Screen):
         log.write(Text.from_ansi(res.stdout))
 
     def run_readme_cmd(self, args, log, cwd):
-        parsed = self._parse_args(args, log)
+        parsed = self._parse_args('readme', args, log)
         if not parsed:
             return
             
@@ -1489,6 +1610,8 @@ class DashboardScreen(Screen):
             cmd_args.append("--include-gamification")
         if parsed.force:
             cmd_args.append("--force")
+        if parsed.yes:
+            cmd_args.append("--yes")
         if parsed.dry_run:
             cmd_args.append("--dry-run")
         
@@ -1497,7 +1620,7 @@ class DashboardScreen(Screen):
         self._refresh_sidebar(self.query_one("#sidebar"), cwd)
 
     def run_charts_cmd(self, args, log, cwd):
-        parsed = self._parse_args(args, log)
+        parsed = self._parse_args('charts', args, log)
         if not parsed:
             return
             
@@ -1508,6 +1631,8 @@ class DashboardScreen(Screen):
         cmd_args = ["charts"]
         if parsed.force:
             cmd_args.append("--force")
+        if parsed.yes:
+            cmd_args.append("--yes")
         if parsed.dry_run:
             cmd_args.append("--dry-run")
         

@@ -358,6 +358,12 @@ def roadmap(
     repo_path = Path.cwd()
     from alo.services.roadmap_service import generate_roadmap_service
     
+    if force and not yes and (repo_path / "roadmap.md").exists():
+        do_overwrite = Confirm.ask("roadmap.md already exists. Regenerating will overwrite it. Continue?", default=False)
+        if not do_overwrite:
+            console.print("[yellow]Roadmap generation cancelled.[/yellow]")
+            raise typer.Exit(0)
+            
     if not mock:
         console.print("[cyan]Generating roadmap...[/cyan]")
         
@@ -418,35 +424,84 @@ def learn(
     console.print("\n[bold red]Common Mistake:[/bold red]")
     console.print(Markdown(session.common_mistake))
     
-    console.print(Panel(session.practice_question, title="Practice Question", style="green"))
+    from alo.services.practice_session_service import parse_practice_items
+    items = parse_practice_items(session.practice_question)
     
-    answer = Prompt.ask("Your answer")
-    if not answer.strip():
-        answer = Prompt.ask("Your answer (cannot be empty)")
+    if len(items) == 1:
+        console.print(Panel(session.practice_question, title="Practice Question", style="green"))
+        answer = Prompt.ask("Your answer")
         if not answer.strip():
-            console.print("[yellow]Session cancelled.[/yellow]")
-            raise typer.Exit(0)
+            answer = Prompt.ask("Your answer (cannot be empty)")
+            if not answer.strip():
+                console.print("[yellow]Session cancelled.[/yellow]")
+                raise typer.Exit(0)
+                
+        if not mock:
+            console.print("[cyan]Evaluating answer...[/cyan]")
             
-    if not mock:
-        console.print("[cyan]Evaluating answer...[/cyan]")
+        eval_res = evaluate_answer(repo_path, session_ctx, answer, mock=mock, dry_run=dry_run)
+        if not eval_res.success:
+            console.print(f"[red]{eval_res.error}[/red]")
+            raise typer.Exit(1)
+            
+        evaluation = eval_res.evaluation
+        eval_color = "green" if evaluation.result == "pass" else ("yellow" if evaluation.result == "partial" else "red")
+        console.print(Panel(f"Result: {evaluation.result.upper()} (Score: {evaluation.score})", style=eval_color))
+        console.print(Markdown(evaluation.feedback))
+        console.print(f"\n[bold green]Strengths:[/bold green] {evaluation.strengths}")
+        console.print(f"[bold red]Weaknesses:[/bold red] {evaluation.weaknesses}")
+        console.print(f"[bold cyan]Next Step:[/bold cyan] {evaluation.recommended_next_step}")
         
-    eval_res = evaluate_answer(repo_path, session_ctx, answer, mock=mock, dry_run=dry_run)
-    if not eval_res.success:
-        console.print(f"[red]{eval_res.error}[/red]")
-        raise typer.Exit(1)
-        
-    evaluation = eval_res.evaluation
-    eval_color = "green" if evaluation.result == "pass" else ("yellow" if evaluation.result == "partial" else "red")
-    console.print(Panel(f"Result: {evaluation.result.upper()} (Score: {evaluation.score})", style=eval_color))
-    console.print(Markdown(evaluation.feedback))
-    console.print(f"\n[bold green]Strengths:[/bold green] {evaluation.strengths}")
-    console.print(f"[bold red]Weaknesses:[/bold red] {evaluation.weaknesses}")
-    console.print(f"[bold cyan]Next Step:[/bold cyan] {evaluation.recommended_next_step}")
-    
-    if not dry_run:
-        console.print("\n[green]State updated successfully.[/green]")
+        if not dry_run:
+            console.print("\n[green]State updated successfully.[/green]")
+        else:
+            console.print("\n[yellow]State not updated (dry run).[/yellow]")
     else:
-        console.print("\n[yellow]State not updated (dry run).[/yellow]")
+        # Multi-item flow
+        passed = 0
+        failed = 0
+        console.print(f"[bold magenta]Multi-part Practice ({len(items)} items)[/bold magenta]")
+        for idx, item_obj in enumerate(items):
+            console.print(f"\n[bold green]Practice Question {idx+1} / {len(items)}[/bold green]")
+            console.print(Panel(item_obj.prompt, style="green"))
+            
+            answer = Prompt.ask("Your answer")
+            if not answer.strip():
+                answer = Prompt.ask("Your answer (cannot be empty)")
+                if not answer.strip():
+                    console.print("[yellow]Session cancelled midway.[/yellow]")
+                    break
+                    
+            if not mock:
+                console.print("[cyan]Evaluating answer...[/cyan]")
+                
+            # Temporarily replace the practice_question for evaluation context
+            original_question = session_ctx.session.practice_question
+            session_ctx.session.practice_question = item_obj.prompt
+            
+            eval_res = evaluate_answer(repo_path, session_ctx, answer, mock=mock, dry_run=dry_run)
+            
+            session_ctx.session.practice_question = original_question
+            
+            if not eval_res.success:
+                console.print(f"[red]{eval_res.error}[/red]")
+                continue
+                
+            evaluation = eval_res.evaluation
+            if evaluation.result == "pass":
+                passed += 1
+                eval_color = "green"
+            else:
+                failed += 1
+                eval_color = "yellow" if evaluation.result == "partial" else "red"
+                
+            console.print(Panel(f"Result: {evaluation.result.upper()} (Score: {evaluation.score})", style=eval_color))
+            console.print(Markdown(evaluation.feedback))
+            
+            # Show correct answer if failed and available in mock/etc, but LLM usually includes it in feedback.
+            # We don't have a rigid expected_answer field natively in the Evaluation schema. The prompt feedback is enough.
+
+        console.print(Panel(f"Practice Complete\nScore: {passed} / {len(items)}\nPassed: {passed}\nFailed: {failed}", title="Summary", style="blue"))
 
 
 @app.command()
@@ -582,11 +637,19 @@ def readme(
     force: bool = typer.Option(False, "--force", help="Overwrite existing README.md"),
     output: Path = typer.Option(None, "--output", help="Optional output path"),
     include_charts: bool = typer.Option(False, "--include-charts", help="Generate and embed local progress SVGs"),
-    include_gamification: bool = typer.Option(False, "--include-gamification", help="Include gamification stats and badges")
+    include_gamification: bool = typer.Option(False, "--include-gamification", help="Include gamification stats and badges"),
+    yes: bool = typer.Option(False, "--yes", help="Skip confirmation prompts")
 ):
     """Generate a learning workspace README."""
     cwd = Path.cwd()
     from alo.services.readme_service import write_workspace_readme, generate_workspace_readme
+    
+    target_out = output or (cwd / "README.md")
+    if force and not yes and target_out.exists():
+        do_overwrite = Confirm.ask(f"{target_out.name} already exists. Regenerating will overwrite it. Continue?", default=False)
+        if not do_overwrite:
+            console.print("[yellow]README generation cancelled.[/yellow]")
+            raise typer.Exit(0)
     
     if dry_run:
         from alo.services.git_service import is_alo_source_repo
@@ -665,11 +728,19 @@ def badges():
 def charts(
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview generated charts without writing"),
     force: bool = typer.Option(False, "--force", help="Overwrite existing SVG files"),
-    output_dir: Path = typer.Option(None, "--output-dir", help="Optional output directory inside workspace")
+    output_dir: Path = typer.Option(None, "--output-dir", help="Optional output directory inside workspace"),
+    yes: bool = typer.Option(False, "--yes", help="Skip confirmation prompts")
 ):
     """Generate local SVG progress charts."""
     cwd = Path.cwd()
     from alo.services.chart_service import write_workspace_charts, generate_workspace_charts
+    
+    target_dir = output_dir or (cwd / "assets")
+    if force and not yes and target_dir.exists() and list(target_dir.glob("alo-*.svg")):
+        do_overwrite = Confirm.ask(f"Existing SVGs found in {target_dir.name}/. Regenerating will overwrite them. Continue?", default=False)
+        if not do_overwrite:
+            console.print("[yellow]Charts generation cancelled.[/yellow]")
+            raise typer.Exit(0)
     
     if dry_run:
         from alo.services.git_service import is_alo_source_repo
