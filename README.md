@@ -172,6 +172,8 @@ alo review --mock
 
 ## Roadmap
 
+See [v1.1.0 planning](docs/roadmap-v1.1.md) for the next milestone.
+
 - **Now:** public PyPI release, secure config, Git-safe sync
 - **Next:** workspace README generator, learning stats, progress charts, streaks
 - **Later:** roadmap import, examples gallery, richer dashboard UX
