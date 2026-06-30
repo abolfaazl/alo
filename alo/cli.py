@@ -490,5 +490,40 @@ def review(
     else:
         console.print("\n[yellow]State not updated (dry run).[/yellow]")
 
+@app.command(name="readme")
+@app.command(name="portfolio", hidden=True)
+def readme(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview generated README without writing"),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing README.md"),
+    output: Path = typer.Option(None, "--output", help="Optional output path")
+):
+    """Generate a learning workspace README."""
+    cwd = Path.cwd()
+    from alo.services.readme_service import write_workspace_readme, generate_workspace_readme
+    
+    if dry_run:
+        from alo.services.git_service import is_alo_source_repo
+        if is_alo_source_repo(cwd):
+            console.print("[red]Cannot generate README in the ALO source repository.[/red]")
+            raise typer.Exit(1)
+        if not (cwd / "learning-profile.md").exists():
+            console.print("[red]Not an ALO workspace. Run `alo init` first.[/red]")
+            raise typer.Exit(1)
+            
+        content = generate_workspace_readme(cwd)
+        console.print(content)
+        return
+
+    result = write_workspace_readme(cwd, output_path=output, force=force)
+    
+    if not result.written:
+        if "already exists" in result.message:
+            console.print(f"[yellow]{result.message}[/yellow]")
+        else:
+            console.print(f"[red]{result.message}[/red]")
+            raise typer.Exit(1)
+    else:
+        console.print(f"[green]{result.message}[/green]")
+
 if __name__ == "__main__":
     app()

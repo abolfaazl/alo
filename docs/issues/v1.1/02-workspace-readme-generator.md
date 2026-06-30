@@ -35,3 +35,6 @@ Provide a command (`alo readme` or `alo portfolio`) to generate a beautiful, Git
 
 ## Priority
 P1
+
+## Implementation Note
+Implemented in Phase 16.
