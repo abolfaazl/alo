@@ -16,6 +16,18 @@ def _get_llm_client(cfg):
         
     return openai.OpenAI(**client_kwargs)
 
+def _safe_raise(msg: str, e: Exception):
+    import openai
+    if isinstance(e, openai.AuthenticationError):
+        raise ValueError(f"{msg} LLM authentication failed. Check your API key in settings.")
+    elif isinstance(e, openai.APIConnectionError):
+        raise ValueError(f"{msg} LLM provider request failed. Check provider, model, and network settings.")
+    elif getattr(openai, "APIError", None) and isinstance(e, getattr(openai, "APIError")):
+        raise ValueError(f"{msg} LLM provider request failed. Check provider, model, and network settings.")
+    else:
+        raise ValueError(f"{msg} LLM processing error. (Type: {type(e).__name__})")
+
+
 def generate_assessment(subject: str, goal: str, level: str, background: str) -> AssessmentResponse | None:
     cfg = load_config()
     client = _get_llm_client(cfg)
@@ -52,7 +64,7 @@ def generate_assessment(subject: str, goal: str, level: str, background: str) ->
             content = response.choices[0].message.content
             return AssessmentResponse.model_validate_json(content)
         except Exception as fallback_e:
-            raise ValueError(f"Failed to generate valid JSON assessment. Error: {fallback_e}")
+            _safe_raise("Failed to generate valid JSON assessment.", fallback_e)
 
 def generate_mock_assessment(subject: str) -> AssessmentResponse:
     questions = []
@@ -108,7 +120,7 @@ def generate_paths(context: str) -> LearningPathsResponse | None:
             content = response.choices[0].message.content
             return LearningPathsResponse.model_validate_json(content)
         except Exception as fallback_e:
-            raise ValueError(f"Failed to generate valid JSON paths. Error: {fallback_e}")
+            _safe_raise("Failed to generate valid JSON paths.", fallback_e)
 
 def generate_mock_paths(subject: str) -> LearningPathsResponse:
     paths = []
@@ -161,7 +173,7 @@ def generate_roadmap(context: str) -> RoadmapResponse | None:
             content = response.choices[0].message.content
             return RoadmapResponse.model_validate_json(content)
         except Exception as fallback_e:
-            raise ValueError(f"Failed to generate valid JSON roadmap. Error: {fallback_e}")
+            _safe_raise("Failed to generate valid JSON roadmap.", fallback_e)
 
 def generate_mock_roadmap(subject: str) -> RoadmapResponse:
     items = []
@@ -209,7 +221,7 @@ def generate_learning_session(context: str, item_content: str) -> LearningSessio
             content = response.choices[0].message.content
             return LearningSession.model_validate_json(content)
         except Exception as fallback_e:
-            raise ValueError(f"Failed to generate valid JSON learning session. Error: {fallback_e}")
+            _safe_raise("Failed to generate valid JSON learning session.", fallback_e)
 
 def evaluate_learning_session(context: str, item_content: str, lesson_content: str, question: str, user_answer: str) -> LearningEvaluation | None:
     cfg = load_config()
@@ -244,7 +256,7 @@ def evaluate_learning_session(context: str, item_content: str, lesson_content: s
             content = response.choices[0].message.content
             return LearningEvaluation.model_validate_json(content)
         except Exception as fallback_e:
-            raise ValueError(f"Failed to generate valid JSON evaluation. Error: {fallback_e}")
+            _safe_raise("Failed to generate valid JSON evaluation.", fallback_e)
 
 def generate_mock_learning_session(item_id: str) -> LearningSession:
     return LearningSession(
@@ -319,7 +331,7 @@ def generate_review_session(context: str, target_id: str, target_type: str, targ
             content = response.choices[0].message.content
             return ReviewSession.model_validate_json(content)
         except Exception as fallback_e:
-            raise ValueError(f"Failed to generate valid JSON review session. Error: {fallback_e}")
+            _safe_raise("Failed to generate valid JSON review session.", fallback_e)
 
 def evaluate_review_session(context: str, target_id: str, target_type: str, target_content: str, lesson_content: str, question: str, user_answer: str) -> ReviewEvaluation | None:
     cfg = load_config()
@@ -356,7 +368,7 @@ def evaluate_review_session(context: str, target_id: str, target_type: str, targ
             content = response.choices[0].message.content
             return ReviewEvaluation.model_validate_json(content)
         except Exception as fallback_e:
-            raise ValueError(f"Failed to generate valid JSON review evaluation. Error: {fallback_e}")
+            _safe_raise("Failed to generate valid JSON review evaluation.", fallback_e)
 
 def generate_mock_review_session(target_id: str, target_type: str, topic: str) -> ReviewSession:
     return ReviewSession(

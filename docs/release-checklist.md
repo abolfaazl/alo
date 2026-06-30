@@ -28,3 +28,6 @@ Before tagging and releasing a new version of ALO, run through the following che
 
 ## Security
 - [ ] Secret scan blocks fake/raw API keys. Docs contain absolutely no raw secret strings.
+
+## Patch Notes
+- v1.0.1: Security patch — sanitized LLM provider authentication errors to prevent API key fragments from appearing in CLI/dashboard output.

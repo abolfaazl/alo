@@ -191,8 +191,7 @@ class DashboardScreen(Screen):
             
             log.write(f"[red]Error during {action}:[/red] {err_msg}")
             
-            is_guided = self.state_data.get("is_guided_flow")
-            if is_guided and err_code in ("missing_config", "missing_api_key", "keyring_unavailable"):
+            if err_code in ("missing_config", "missing_api_key", "keyring_unavailable"):
                 self.app_state = "guided_recovery"
                 self.state_data["pending_guided_action"] = action
                 
