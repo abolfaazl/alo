@@ -496,7 +496,8 @@ def readme(
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview generated README without writing"),
     force: bool = typer.Option(False, "--force", help="Overwrite existing README.md"),
     output: Path = typer.Option(None, "--output", help="Optional output path"),
-    include_charts: bool = typer.Option(False, "--include-charts", help="Generate and embed local progress SVGs")
+    include_charts: bool = typer.Option(False, "--include-charts", help="Generate and embed local progress SVGs"),
+    include_gamification: bool = typer.Option(False, "--include-gamification", help="Include gamification stats and badges")
 ):
     """Generate a learning workspace README."""
     cwd = Path.cwd()
@@ -511,7 +512,7 @@ def readme(
             console.print("[red]Not an ALO workspace. Run `alo init` first.[/red]")
             raise typer.Exit(1)
             
-        content = generate_workspace_readme(cwd, include_charts=include_charts)
+        content = generate_workspace_readme(cwd, include_charts=include_charts, include_gamification=include_gamification)
         console.print(content)
         
         if include_charts:
@@ -522,16 +523,57 @@ def readme(
                 console.print(f"  - assets/{name}")
         return
 
-    result = write_workspace_readme(cwd, output_path=output, force=force, include_charts=include_charts)
+    result = write_workspace_readme(cwd, output_path=output, force=force, include_charts=include_charts, include_gamification=include_gamification)
     
     if not result.written:
         if "already exists" in result.message:
             console.print(f"[yellow]{result.message}[/yellow]")
         else:
             console.print(f"[red]{result.message}[/red]")
-            raise typer.Exit(1)
-    else:
-        console.print(f"[green]{result.message}[/green]")
+        raise typer.Exit(1)
+        
+    console.print(f"[green]{result.message}[/green]")
+    if include_charts:
+        console.print("[green]Generated 4 SVG charts in assets/[/green]")
+
+@app.command(name="badges")
+def badges():
+    """View local gamification summary and badges."""
+    cwd = Path.cwd()
+    from alo.services.git_service import is_alo_source_repo
+    if is_alo_source_repo(cwd):
+        console.print("[red]Cannot run gamification inside the ALO source repository.[/red]")
+        raise typer.Exit(1)
+    if not (cwd / "learning-profile.md").exists():
+        console.print("[red]Not an ALO workspace. Run `alo init` first.[/red]")
+        raise typer.Exit(1)
+        
+    from alo.services.gamification_service import compute_gamification_summary
+    
+    try:
+        summary = compute_gamification_summary(cwd)
+        console.print("\n[bold]Learning Gamification[/bold]")
+        console.print(f"XP: [yellow]{summary.xp}[/yellow] | Level: [cyan]{summary.level}[/cyan]")
+        console.print(f"Current Streak: {summary.current_streak_days} days | Longest: {summary.longest_streak_days} days")
+        console.print(f"Weekly Goal: {summary.weekly_goal_progress} / {summary.weekly_goal_target} days")
+        console.print(f"Consistency Score: {summary.consistency_score} / 100")
+        
+        earned = [b for b in summary.badges if b.earned]
+        console.print(f"\n[bold]Earned Milestones ({len(earned)})[/bold]")
+        if not earned:
+            console.print("  (None yet, keep learning!)")
+        else:
+            for b in earned:
+                console.print(f"  [green]✓[/green] [bold]{b.label}[/bold] — {b.description}")
+                
+        locked = [b for b in summary.badges if not b.earned]
+        console.print(f"\n[bold]Locked Milestones ({len(locked)})[/bold]")
+        for b in locked:
+            console.print(f"  [dim]· {b.label} — {b.description} ({b.progress}/{b.target})[/dim]")
+            
+    except Exception as e:
+        console.print(f"[red]Failed to compute gamification summary:[/red] {e}")
+        raise typer.Exit(1)
 
 @app.command(name="charts")
 def charts(

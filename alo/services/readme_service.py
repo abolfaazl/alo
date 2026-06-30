@@ -86,7 +86,7 @@ def sanitize_content(content: str) -> str:
         sanitized = re.sub(pattern, "[REDACTED]", sanitized, flags=re.IGNORECASE)
     return sanitized
 
-def generate_workspace_readme(workspace_path: Path, *, include_charts: bool = False) -> str:
+def generate_workspace_readme(workspace_path: Path, *, include_charts: bool = False, include_gamification: bool = False) -> str:
     subject = extract_subject(workspace_path)
     stats = compute_learning_stats(workspace_path)
     weakness_summary = extract_weakness_summary(workspace_path)
@@ -120,10 +120,34 @@ def generate_workspace_readme(workspace_path: Path, *, include_charts: bool = Fa
 </p>
 """
 
+    gamification_section = ""
+    if include_gamification:
+        from alo.services.gamification_service import compute_gamification_from_stats
+        g_summary = compute_gamification_from_stats(stats)
+        
+        earned_badges = [b for b in g_summary.badges if b.earned]
+        badges_list = ""
+        if earned_badges:
+            badges_list = "\n### Earned Milestones\n\n"
+            for b in earned_badges:
+                badges_list += f"- {b.label} — {b.description}\n"
+        
+        gamification_section = f"""
+## Learning Momentum
+
+| Metric | Value |
+|---|---:|
+| XP | {g_summary.xp} |
+| Level | {g_summary.level} |
+| Current streak | {g_summary.current_streak_days} days |
+| Longest streak | {g_summary.longest_streak_days} days |
+| Weekly goal | {g_summary.weekly_goal_progress} / {g_summary.weekly_goal_target} days |
+{badges_list}"""
+
     content = f"""# Learning Workspace: {subject}
 
 A local ALO learning workspace for tracking roadmap, practice, reviews, and progress.
-{charts_section}
+{charts_section}{gamification_section}
 ## Current Snapshot
 
 | Metric | Value |
@@ -176,6 +200,7 @@ def write_workspace_readme(
     output_path: Path | None = None,
     force: bool = False,
     include_charts: bool = False,
+    include_gamification: bool = False,
 ) -> ReadmeWriteResult:
     if is_alo_source_repo(workspace_path):
         return ReadmeWriteResult(
@@ -218,7 +243,7 @@ def write_workspace_readme(
                     warnings=[]
                 )
 
-    content = generate_workspace_readme(workspace_path, include_charts=include_charts)
+    content = generate_workspace_readme(workspace_path, include_charts=include_charts, include_gamification=include_gamification)
     
     try:
         markdown_store.write_text_safely(target_path, content)

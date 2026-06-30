@@ -123,6 +123,29 @@ def test_cli_command_with_charts(tmp_path, monkeypatch):
     content = (tmp_path / "README.md").read_text()
     assert "assets/alo-streak.svg" in content
 
+def test_cli_command_with_gamification(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "learning-profile.md").write_text("Subject: Math")
+    
+    res = runner.invoke(app, ["readme", "--include-gamification"])
+    assert res.exit_code == 0
+    content = (tmp_path / "README.md").read_text()
+    assert "## Learning Momentum" in content
+    assert "XP" in content
+    assert "Level" in content
+
+def test_cli_command_with_charts_and_gamification(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "learning-profile.md").write_text("Subject: Math")
+    
+    res = runner.invoke(app, ["readme", "--include-charts", "--include-gamification"])
+    assert res.exit_code == 0
+    content = (tmp_path / "README.md").read_text()
+    assert "## Learning Momentum" in content
+    assert "## Progress Overview" in content
+    assert "assets/alo-streak.svg" in content
+    assert (tmp_path / "assets" / "alo-streak.svg").exists()
+
 def test_readme_with_charts_does_not_overwrite_existing_assets(tmp_path):
     (tmp_path / "learning-profile.md").write_text("Subject: Math")
     (tmp_path / "assets").mkdir()

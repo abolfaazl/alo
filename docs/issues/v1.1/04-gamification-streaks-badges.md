@@ -34,3 +34,6 @@ Add local-only, optional gamification features like learning streaks, weekly goa
 
 ## Priority
 P2
+
+## Implementation Note
+Implemented in Phase 18.
