@@ -31,6 +31,14 @@ class ConfigLoadResult(BaseModel):
     warnings: List[str] = []
     migrated_from: Optional[Path] = None
 
+class ObsidianConfig(BaseModel):
+    enabled: bool = False
+    vault_path: str = ""
+    folder: str = "ALO"
+    auto_open_lesson: bool = True
+    export_practice_results: bool = True
+    safe_markers: bool = True
+
 class AloConfig(BaseModel):
     llm_provider: str = "openai"
     model: str = "gpt-4o-mini"
@@ -41,6 +49,7 @@ class AloConfig(BaseModel):
     default_language: str = "en"
     safe_mode: bool = True
     auto_push: bool = False
+    obsidian: ObsidianConfig = ObsidianConfig()
     
     @model_validator(mode='before')
     @classmethod
