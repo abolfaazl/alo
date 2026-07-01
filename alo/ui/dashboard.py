@@ -91,12 +91,13 @@ class DashboardScreen(Screen):
 
     def action_save_settings(self) -> None:
         if self.app_state.startswith("settings_") and "config_obj" in self.state_data:
-            from alo.config import save_config, load_config, validate_config_readiness
+            from alo.config import save_config, load_config_result, validate_config_readiness
             cfg = self.state_data["config_obj"]
             log = self.query_one("#chat-log", RichLog)
             try:
                 save_config(cfg)
-                reloaded = load_config()
+                res = load_config_result()
+                reloaded = res.config
                 if (reloaded.llm_provider != cfg.llm_provider or
                     reloaded.model != cfg.model or
                     reloaded.base_url != cfg.base_url or
@@ -111,6 +112,8 @@ class DashboardScreen(Screen):
                     # We still saved the non-secret settings, but we should warn the user
                     pass
                 
+                self.state_data["config_result"] = res
+                self.state_data["config_obj"] = reloaded
                 self.state_data["settings_dirty"] = False
                 log.write("\n[green]Saved and reloaded successfully.[/green]")
             except Exception as e:
@@ -476,6 +479,11 @@ class DashboardScreen(Screen):
                 log.write(f"\n[green]{msg}[/green]")
             else:
                 log.write(f"\n[yellow]{msg}[/yellow]")
+                
+            if not data.get("dry_run"):
+                from alo.state_manager import trigger_auto_sync
+                if trigger_auto_sync(cwd, "paths selection"):
+                    log.write("[dim]Safe local sync committed.[/dim]")
                 
             if data.get("is_guided_flow"):
                 self.app_state = "guided_start_roadmap"
@@ -948,9 +956,12 @@ class DashboardScreen(Screen):
         self.show_choices("Select a path to continue?", options)
 
     def run_settings_flow(self, log, pending_action: str | None = None):
-        from alo import config as alo_config
-        self.app_state = "settings_menu"
-        self.state_data = {"config_obj": alo_config.load_config() if alo_config.config_exists() else alo_config.AloConfig()}
+        import alo.config as alo_config
+        res = alo_config.load_config_result()
+        self.state_data = {
+            "config_obj": res.config,
+            "config_result": res
+        }
         if pending_action:
             self.state_data["pending_guided_action"] = pending_action
         self._render_settings_menu(log)
@@ -985,6 +996,17 @@ class DashboardScreen(Screen):
         self.state_data["readiness"] = readiness
         
         log.write("\n[bold cyan]ALO Settings[/bold cyan]\n")
+        
+        cres = self.state_data.get("config_result")
+        if cres:
+            log.write(f"[dim]Config file: {cres.path}[/dim]")
+            log.write(f"[dim]Loaded from: {cres.loaded_from}[/dim]")
+            if cres.warnings:
+                for w in cres.warnings:
+                    log.write(f"[bold yellow]Config warning: {w}[/bold yellow]")
+        
+        cwd = Path.cwd()
+        log.write(f"[dim]Workspace: {cwd}[/dim]\n")
         
         ready_status = "✅ [green]Ready[/green]" if readiness.llm_ready else "❌ [red]Not ready[/red]"
         log.write(f"LLM Readiness: {ready_status}\n")
@@ -1233,6 +1255,10 @@ class DashboardScreen(Screen):
             log.write(f"\n[yellow]Successfully generated {len(res.items)} roadmap items (dry run).[/yellow]")
         else:
             log.write(f"\n[green]Successfully generated {len(res.items)} roadmap items![/green]")
+            from alo.state_manager import trigger_auto_sync
+            from pathlib import Path
+            if trigger_auto_sync(Path.cwd(), "roadmap generation"):
+                log.write("[dim]Safe local sync committed.[/dim]")
             
         table = Table(title=f"Roadmap Summary ({res.active_path_id})")
         table.add_column("ID", style="cyan")
@@ -1329,6 +1355,12 @@ class DashboardScreen(Screen):
                     f"Average Score: {summary.average_score}"
                 )
                 log.write(Panel(summary_text, title="Practice Complete", style="blue"))
+                
+                if not self.state_data.get("dry_run"):
+                    from alo.state_manager import trigger_auto_sync
+                    cwd = Path.cwd()
+                    if trigger_auto_sync(cwd, "learning session"):
+                        log.write("[dim]Safe local sync committed.[/dim]")
             return
             
         item = items[idx]
@@ -1552,6 +1584,10 @@ class DashboardScreen(Screen):
             log.write("[yellow]Dry run completed. No files were updated.[/yellow]")
         else:
             log.write("[green]Assessment saved successfully.[/green]")
+            from alo.state_manager import trigger_auto_sync
+            cwd = Path.cwd()
+            if trigger_auto_sync(cwd, "assessment"):
+                log.write("[dim]Safe local sync committed.[/dim]")
             
         if is_guided:
             self.app_state = "guided_start_paths"

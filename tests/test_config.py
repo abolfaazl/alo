@@ -3,16 +3,15 @@ from pathlib import Path
 from alo import config
 
 def test_config_path_is_outside_repo(monkeypatch, tmp_path):
-    # Mock home directory
-    home_dir = tmp_path / "home"
-    home_dir.mkdir()
-    monkeypatch.setenv("USERPROFILE", str(home_dir)) # Windows
-    monkeypatch.setenv("HOME", str(home_dir)) # Unix
+    # Mock platformdirs
+    config_mock = tmp_path / "appdata" / "ALO"
+    config_mock.mkdir(parents=True)
     
-    monkeypatch.setattr(Path, "home", lambda: home_dir)
+    import platformdirs
+    monkeypatch.setattr(platformdirs, "user_config_dir", lambda appname: str(config_mock))
 
     config_dir = config.get_config_dir()
-    assert config_dir == home_dir / ".alo"
+    assert config_dir == config_mock
     
     cwd = Path.cwd()
     assert cwd not in config_dir.parents
@@ -28,8 +27,12 @@ def test_openai_compatible_requires_base_url():
     assert cfg.base_url == "http://localhost:8080"
     
 def test_save_and_load_config(monkeypatch, tmp_path):
+    config_mock = tmp_path / "appdata" / "ALO"
+    import platformdirs
+    monkeypatch.setattr(platformdirs, "user_config_dir", lambda appname: str(config_mock))
+    
+    # ensure legacy dir exists empty or mock it so migration doesn't hit real home
     home_dir = tmp_path / "home"
-    home_dir.mkdir()
     monkeypatch.setattr(Path, "home", lambda: home_dir)
 
     assert config.config_exists() is False
@@ -46,6 +49,72 @@ def test_save_and_load_config(monkeypatch, tmp_path):
 
     loaded_config = config.load_config()
     assert loaded_config == test_config
+    
+    res = config.load_config_result()
+    assert res.loaded_from == "persisted"
+    assert res.path == config_mock / "config.json"
+
+def test_config_migration(monkeypatch, tmp_path):
+    config_mock = tmp_path / "appdata" / "ALO"
+    import platformdirs
+    monkeypatch.setattr(platformdirs, "user_config_dir", lambda appname: str(config_mock))
+    
+    home_dir = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", lambda: home_dir)
+    
+    legacy_dir = home_dir / ".alo"
+    legacy_dir.mkdir(parents=True)
+    legacy_file = legacy_dir / "config.json"
+    legacy_file.write_text('{"llm_provider": "legacy_prov"}', encoding="utf-8")
+    
+    assert not config_mock.exists()
+    
+    res = config.load_config_result()
+    assert res.config.llm_provider == "legacy_prov"
+    assert res.loaded_from == "migrated"
+    assert res.migrated_from == legacy_file
+    
+    assert config.config_exists() is True
+    assert config.get_config_path().read_text(encoding="utf-8") == '{"llm_provider": "legacy_prov"}'
+
+def test_invalid_config_backup(monkeypatch, tmp_path):
+    config_mock = tmp_path / "appdata" / "ALO"
+    import platformdirs
+    monkeypatch.setattr(platformdirs, "user_config_dir", lambda appname: str(config_mock))
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+    
+    config_mock.mkdir(parents=True)
+    bad_file = config_mock / "config.json"
+    bad_file.write_text('{"llm_provider": broken_json_here}', encoding="utf-8")
+    
+    res = config.load_config_result()
+    assert res.loaded_from == "invalid-fallback"
+    assert len(res.warnings) == 1
+    assert "invalid JSON" in res.warnings[0]
+    
+    # Original is preserved
+    assert bad_file.read_text(encoding="utf-8") == '{"llm_provider": broken_json_here}'
+    
+    # Backup is created
+    backups = list(config_mock.glob("config_broken_*.json"))
+    assert len(backups) == 1
+    assert backups[0].read_text(encoding="utf-8") == '{"llm_provider": broken_json_here}'
+
+def test_partial_config_preservation(monkeypatch, tmp_path):
+    config_mock = tmp_path / "appdata" / "ALO"
+    import platformdirs
+    monkeypatch.setattr(platformdirs, "user_config_dir", lambda appname: str(config_mock))
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+    
+    config_mock.mkdir(parents=True)
+    file = config_mock / "config.json"
+    file.write_text('{"llm_provider": "openai-compatible", "model": "gpt-custom"}', encoding="utf-8")
+    
+    res = config.load_config_result()
+    assert res.loaded_from == "persisted"
+    assert res.config.llm_provider == "openai-compatible"
+    assert res.config.model == "gpt-custom"
+    assert res.config.base_url is None
 
 def test_no_secret_written_to_repo():
     example_config_path = Path("alo_config.example.json")

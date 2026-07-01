@@ -316,6 +316,9 @@ def assess(
         return
         
     console.print("[green]Assessment saved successfully.[/green]")
+    from alo.state_manager import trigger_auto_sync
+    if trigger_auto_sync(cwd, "assessment"):
+        console.print("[dim]Safe local sync committed.[/dim]")
 
 @app.command()
 def paths(mock: bool = False, dry_run: bool = False):
@@ -346,6 +349,11 @@ def paths(mock: bool = False, dry_run: bool = False):
         console.print(f"\n[green]{msg}[/green]")
     else:
         console.print(f"\n[yellow]{msg}[/yellow]")
+        
+    if not dry_run:
+        from alo.state_manager import trigger_auto_sync
+        if trigger_auto_sync(repo_path, "paths selection"):
+            console.print("[dim]Safe local sync committed.[/dim]")
 
 @app.command()
 def roadmap(
@@ -379,6 +387,9 @@ def roadmap(
         console.print(f"\n[yellow]Successfully generated {len(res.items)} roadmap items (dry run).[/yellow]")
     else:
         console.print(f"\n[green]Successfully generated {len(res.items)} roadmap items![/green]")
+        from alo.state_manager import trigger_auto_sync
+        if trigger_auto_sync(repo_path, "roadmap generation"):
+            console.print("[dim]Safe local sync committed.[/dim]")
         
     table = Table(title=f"Roadmap Summary ({res.active_path_id})")
     table.add_column("ID", style="cyan")
@@ -454,6 +465,9 @@ def learn(
         
         if not dry_run:
             console.print("\n[green]State updated successfully.[/green]")
+            from alo.state_manager import trigger_auto_sync
+            if trigger_auto_sync(repo_path, "learning session"):
+                console.print("[dim]Safe local sync committed.[/dim]")
         else:
             console.print("\n[yellow]State not updated (dry run).[/yellow]")
     else:
@@ -517,6 +531,11 @@ def learn(
             f"Average Score: {summary.average_score}"
         )
         console.print(Panel(summary_text, title="Practice Complete", style="blue"))
+        
+        if not dry_run:
+            from alo.state_manager import trigger_auto_sync
+            if trigger_auto_sync(repo_path, "learning session"):
+                console.print("[dim]Safe local sync committed.[/dim]")
 
 
 @app.command()
@@ -642,6 +661,9 @@ def review(
     
     if not dry_run:
         console.print("\n[green]State updated successfully.[/green]")
+        from alo.state_manager import trigger_auto_sync
+        if trigger_auto_sync(cwd, "review session"):
+            console.print("[dim]Safe local sync committed.[/dim]")
     else:
         console.print("\n[yellow]State not updated (dry run).[/yellow]")
 

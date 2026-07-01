@@ -25,24 +25,28 @@ CRITICAL INSTRUCTIONS:
 1. Generate exactly 3 distinct learning paths.
 2. Use the provided JSON schema. Ensure output is strict JSON with no markdown wrapping.
 3. If no formal assessment exists in the context, set the path confidence to "low" or "medium".
-4. Ensure the paths directly address the user's current level, goals, and any identified weaknesses.
+4. Ensure the paths directly address the user's current level, goals, and strictly target any identified assessment weaknesses and knowledge gaps.
+5. If the user assessed as a beginner, do not generate advanced-only paths.
+6. Do NOT hallucinate assessment results if the Assessment Summary says "Not assessed yet".
 """
 
 ROADMAP_PROMPT = """You are an expert tutor.
-Review the following context about the user's learning project, especially the Active Learning Path:
+Review the following context about the user's learning project, especially the Active Learning Path and Assessment Summary:
 {context}
 
 Generate a detailed, step-by-step roadmap for the current learning workspace based on the selected active learning path.
-The roadmap must be subject-specific.
+The roadmap must be subject-specific and heavily personalized based on the assessment data.
 
 CRITICAL INSTRUCTIONS:
 1. Generate between 8 and 15 roadmap items. Do not generate fewer than 8 or more than 15.
-2. Ensure the roadmap is beginner-friendly if the user's profile indicates they are a beginner.
+2. Ensure the roadmap is beginner-friendly if the user's profile indicates they are a beginner. If they passed basics in the assessment, do not waste too much time on basics.
 3. Use the provided JSON schema. Ensure output is strict JSON with no markdown wrapping.
 4. Each item must have a stable ID starting from ALO-RM-001 (e.g., ALO-RM-001, ALO-RM-002).
 5. Do NOT include private company names unless the privacy rules permit it.
 6. The items must be small, actionable learning units suitable for a single or small group of study sessions.
 7. Use valid status values. Default to "todo".
+8. Strongly tailor the items to address specific weaknesses found in the assessment (e.g., if weakness is "subject pronouns", ensure roadmap has "subject pronouns" practice).
+9. Do NOT hallucinate assessment data if missing.
 """
 
 SESSION_PROMPT = """You are an expert tutor.

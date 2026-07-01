@@ -4,6 +4,8 @@ from pydantic import BaseModel, model_validator
 from typing import Optional, Literal, List
 from dataclasses import dataclass
 import os
+import platformdirs
+from datetime import datetime
 
 @dataclass
 class ConfigItemStatus:
@@ -21,6 +23,13 @@ class ConfigReadiness:
     missing_required: List[ConfigItemStatus]
     warnings: List[ConfigItemStatus]
     items: List[ConfigItemStatus]
+
+class ConfigLoadResult(BaseModel):
+    config: 'AloConfig'
+    path: Path
+    loaded_from: str
+    warnings: List[str] = []
+    migrated_from: Optional[Path] = None
 
 class AloConfig(BaseModel):
     llm_provider: str = "openai"
@@ -62,7 +71,7 @@ class AloConfig(BaseModel):
         return self
 
 def get_config_dir() -> Path:
-    return Path.home() / ".alo"
+    return Path(platformdirs.user_config_dir("ALO"))
 
 def get_config_path() -> Path:
     return get_config_dir() / "config.json"
@@ -70,16 +79,61 @@ def get_config_path() -> Path:
 def config_exists() -> bool:
     return get_config_path().exists()
 
-def load_config() -> AloConfig:
-    path = get_config_path()
-    if not path.exists():
-        return AloConfig()
+def load_config_result() -> ConfigLoadResult:
+    stable_path = get_config_path()
+    legacy_path = Path.home() / ".alo" / "config.json"
+    
+    if not stable_path.exists():
+        if legacy_path.exists():
+            stable_path.parent.mkdir(parents=True, exist_ok=True)
+            import shutil
+            shutil.copy2(legacy_path, stable_path)
+            res = _load_file(stable_path)
+            res.loaded_from = "migrated"
+            res.migrated_from = legacy_path
+            return res
+        else:
+            return ConfigLoadResult(
+                config=AloConfig(),
+                path=stable_path,
+                loaded_from="defaults"
+            )
+            
+    return _load_file(stable_path)
+
+def _load_file(path: Path) -> ConfigLoadResult:
     try:
         content = path.read_text(encoding="utf-8")
         data = json.loads(content)
-        return AloConfig(**data)
-    except Exception:
-        return AloConfig()
+        config = AloConfig(**data)
+        return ConfigLoadResult(
+            config=config,
+            path=path,
+            loaded_from="persisted"
+        )
+    except json.JSONDecodeError as e:
+        backup_path = path.parent / f"config_broken_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        import shutil
+        shutil.copy2(path, backup_path)
+        return ConfigLoadResult(
+            config=AloConfig(),
+            path=path,
+            loaded_from="invalid-fallback",
+            warnings=[f"Config file is invalid JSON: {e}. Backup saved to {backup_path.name}."]
+        )
+    except Exception as e:
+        backup_path = path.parent / f"config_broken_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        import shutil
+        shutil.copy2(path, backup_path)
+        return ConfigLoadResult(
+            config=AloConfig(),
+            path=path,
+            loaded_from="invalid-fallback",
+            warnings=[f"Config validation failed: {e}. Backup saved to {backup_path.name}."]
+        )
+
+def load_config() -> AloConfig:
+    return load_config_result().config
 
 def save_config(config: AloConfig) -> None:
     path = get_config_path()

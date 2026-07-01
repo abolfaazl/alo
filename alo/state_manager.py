@@ -749,3 +749,33 @@ def upsert_learning_session_weaknesses(repo_path: Path, eval_result, item_id: st
             status="active"
         )
         upsert_weakness(repo_path, entry)
+
+def trigger_auto_sync(repo_path: Path, action_name: str) -> bool:
+    from alo.services.git_service import commit_changes, push_current_branch
+    from alo.config import load_config
+    
+    # 1. Ensure portfolio files are updated ONLY IF they exist
+    from alo.services.readme_service import write_workspace_readme
+    from alo.services.chart_service import write_workspace_charts
+    
+    if (repo_path / "README.md").exists():
+        write_workspace_readme(repo_path, include_charts=(repo_path / "charts").exists())
+    if (repo_path / "charts").exists():
+        write_workspace_charts(repo_path)
+    
+    cfg = load_config()
+    commit_msg = f"alo({action_name.lower().replace(' ', '_')}): sync progress after {action_name}"
+    
+    success = False
+    try:
+        success = commit_changes(repo_path, commit_msg)
+    except Exception:
+        pass
+        
+    if success and getattr(cfg, 'auto_push', False):
+        try:
+            push_current_branch(repo_path)
+        except Exception:
+            pass
+            
+    return success
