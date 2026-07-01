@@ -723,18 +723,22 @@ class DashboardScreen(Screen):
         elif state == "settings_edit_provider":
             data["config_obj"].llm_provider = text.strip()
             data["settings_dirty"] = True
+            data["connection_tested"] = "Not tested"
             self._render_settings_menu(log)
         elif state == "settings_edit_model":
             data["config_obj"].model = text.strip()
             data["settings_dirty"] = True
+            data["connection_tested"] = "Not tested"
             self._render_settings_menu(log)
         elif state == "settings_edit_base_url":
             data["config_obj"].base_url = text.strip() or None
             data["settings_dirty"] = True
+            data["connection_tested"] = "Not tested"
             self._render_settings_menu(log)
         elif state == "settings_edit_key_storage":
             data["config_obj"].api_key_storage = text.strip()
             data["settings_dirty"] = True
+            data["connection_tested"] = "Not tested"
             self._render_settings_menu(log)
         elif state == "settings_edit_api_key_raw":
             raw_key = text.strip()
@@ -749,11 +753,13 @@ class DashboardScreen(Screen):
                 except Exception as e:
                     log.write(f"[red]Failed to save to keyring: {e}[/red]")
             data["settings_dirty"] = True
+            data["connection_tested"] = "Not tested"
             self._render_settings_menu(log)
         elif state == "settings_edit_api_key_env_var":
             data["config_obj"].api_key_env_var = text.strip() or "OPENAI_API_KEY"
             data["config_obj"].api_key_name = None
             data["settings_dirty"] = True
+            data["connection_tested"] = "Not tested"
             self._render_settings_menu(log)
         elif state == "settings_edit_language":
             data["config_obj"].default_language = text.strip() or "en"
@@ -831,10 +837,12 @@ class DashboardScreen(Screen):
     def _on_llm_test_completed(self, res, log):
         self.exit_working_state()
         if res.success:
-            msg = res.data.get("message", "Success") if res.data else "Success"
+            msg = res.payload.get("message", "Success") if res.payload else "Success"
             log.write(f"\n✅ [green]{msg}[/green]")
+            self.state_data["connection_tested"] = "Verified"
         else:
             log.write(f"\n❌ [red]Test failed:[/red] {res.error}")
+            self.state_data["connection_tested"] = "Failed"
         self._render_settings_menu(log)
 
     def _parse_args(self, cmd_name, args, log):
@@ -960,7 +968,8 @@ class DashboardScreen(Screen):
         res = alo_config.load_config_result()
         self.state_data = {
             "config_obj": res.config,
-            "config_result": res
+            "config_result": res,
+            "connection_tested": "Not tested"
         }
         if pending_action:
             self.state_data["pending_guided_action"] = pending_action
@@ -1008,8 +1017,18 @@ class DashboardScreen(Screen):
         cwd = Path.cwd()
         log.write(f"[dim]Workspace: {cwd}[/dim]\n")
         
-        ready_status = "✅ [green]Ready[/green]" if readiness.llm_ready else "❌ [red]Not ready[/red]"
-        log.write(f"LLM Readiness: {ready_status}\n")
+        conn_state = self.state_data.get("connection_tested", "Not tested")
+        if readiness.llm_ready:
+            if conn_state == "Verified":
+                ready_status = "✅ [green]Config Complete | Connection: Verified[/green]"
+            elif conn_state == "Failed":
+                ready_status = "❌ [red]Config Complete | Connection: Failed[/red]"
+            else:
+                ready_status = "⚠️ [yellow]Config Complete | Connection: Not tested[/yellow]"
+        else:
+            ready_status = "❌ [red]Config Incomplete | Connection: Not tested[/red]"
+            
+        log.write(f"LLM Setup: {ready_status}\n")
         
         log.write("[bold]Required for AI learning:[/bold]")
         
