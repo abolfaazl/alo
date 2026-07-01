@@ -1,5 +1,7 @@
 # ALO — Agentic Learning OS
 
+![ALO - Agentic Laerning OS](assets/banner.png)
+
 Turn any folder into a learning workspace.
 
 ALO is a local-first CLI/TUI for building a personal learning system around any subject. It keeps your profile, roadmap, lessons, weaknesses, reviews, and progress in Markdown files you can read, edit, and commit.

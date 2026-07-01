@@ -435,6 +435,20 @@ def learn(
     console.print("\n[bold red]Common Mistake:[/bold red]")
     console.print(Markdown(session.common_mistake))
     
+    from alo.config import load_config
+    from alo.services.obsidian_service import is_obsidian_enabled, export_lesson, auto_open_file
+    cfg = load_config()
+    if is_obsidian_enabled(cfg):
+        exported_path = export_lesson(
+            item_id=session_ctx.target_id,
+            title=session.topic,
+            path_name="Learning Path",
+            lesson_content=session.short_lesson + "\n\n### Example\n\n" + session.example + "\n\n### Common Mistake\n\n" + session.common_mistake,
+            cfg=cfg
+        )
+        if exported_path and cfg.obsidian.auto_open_lesson:
+            auto_open_file(exported_path, cfg)
+            
     from alo.services.practice_session_service import parse_practice_items
     items = parse_practice_items(session.practice_question)
     
@@ -462,6 +476,19 @@ def learn(
         console.print(f"\n[bold green]Strengths:[/bold green] {evaluation.strengths}")
         console.print(f"[bold red]Weaknesses:[/bold red] {evaluation.weaknesses}")
         console.print(f"[bold cyan]Next Step:[/bold cyan] {evaluation.recommended_next_step}")
+        
+        if is_obsidian_enabled(cfg):
+            from alo.services.obsidian_service import export_practice_result
+            export_practice_result(
+                item_id=session_ctx.target_id,
+                title=session.topic,
+                path_name="Learning Path",
+                status=evaluation.result,
+                score=evaluation.score,
+                strengths=evaluation.strengths,
+                weaknesses=evaluation.weaknesses,
+                cfg=cfg
+            )
         
         if not dry_run:
             console.print("\n[green]State updated successfully.[/green]")
@@ -531,6 +558,19 @@ def learn(
             f"Average Score: {summary.average_score}"
         )
         console.print(Panel(summary_text, title="Practice Complete", style="blue"))
+        
+        if is_obsidian_enabled(cfg):
+            from alo.services.obsidian_service import export_practice_result
+            export_practice_result(
+                item_id=session_ctx.target_id,
+                title=session.topic,
+                path_name="Learning Path",
+                status="pass" if summary.passed == summary.total_items else ("fail" if summary.failed > 0 else "partial"),
+                score=summary.average_score,
+                strengths=[],
+                weaknesses=[],
+                cfg=cfg
+            )
         
         if not dry_run:
             from alo.state_manager import trigger_auto_sync
@@ -806,6 +846,90 @@ def charts(
         console.print(f"[green]{result.message}[/green]")
         for f in result.files:
             console.print(f"  - {f}")
+
+obsidian_app = typer.Typer(help="Manage Obsidian integration")
+app.add_typer(obsidian_app, name="obsidian")
+
+@obsidian_app.command()
+def setup(
+    vault: str = typer.Option(..., help="Path to your Obsidian vault"),
+    folder: str = typer.Option("ALO", help="Folder inside the vault for ALO files"),
+    auto_open: bool = typer.Option(True, "--auto-open/--no-auto-open", help="Automatically open generated lessons in Obsidian")
+):
+    """Setup Obsidian integration."""
+    from alo.config import load_config, save_config
+    cfg = load_config()
+    
+    cfg.obsidian.enabled = True
+    cfg.obsidian.vault_path = vault
+    cfg.obsidian.folder = folder
+    cfg.obsidian.auto_open_lesson = auto_open
+    
+    save_config(cfg)
+    console.print("[green]Obsidian integration configured![/green]")
+    
+    from alo.services.obsidian_service import get_vault_path, get_alo_folder_path, update_dashboard
+    v_path = get_vault_path(cfg)
+    if not v_path:
+        console.print(f"[yellow]Warning: Vault path '{vault}' does not exist or is invalid.[/yellow]")
+    else:
+        alo_folder = get_alo_folder_path(cfg)
+        if alo_folder:
+            alo_folder.mkdir(parents=True, exist_ok=True)
+            console.print(f"[green]ALO folder ready at: {alo_folder}[/green]")
+            update_dashboard(cfg=cfg)
+
+@obsidian_app.command("status")
+def obsidian_status():
+    """Show Obsidian integration status."""
+    from alo.config import load_config
+    from alo.services.obsidian_service import get_vault_path, get_alo_folder_path
+    cfg = load_config()
+    
+    if not cfg.obsidian.enabled:
+        console.print("[yellow]Obsidian integration is disabled.[/yellow]")
+        return
+        
+    v_path = get_vault_path(cfg)
+    console.print("[bold cyan]Obsidian Integration Status[/bold cyan]")
+    console.print(f"Enabled: {cfg.obsidian.enabled}")
+    console.print(f"Vault Path: {cfg.obsidian.vault_path} (Valid: {bool(v_path)})")
+    console.print(f"Folder: {cfg.obsidian.folder}")
+    console.print(f"Auto-open Lesson: {cfg.obsidian.auto_open_lesson}")
+    console.print(f"Export Practice Results: {cfg.obsidian.export_practice_results}")
+    
+    alo_folder = get_alo_folder_path(cfg)
+    if alo_folder and (alo_folder / "Dashboard.md").exists():
+        console.print("[green]Dashboard exists.[/green]")
+    else:
+        console.print("[yellow]Dashboard not found.[/yellow]")
+
+@obsidian_app.command()
+def open(target: str = typer.Argument("dashboard", help="Target to open (dashboard)")):
+    """Open ALO in Obsidian."""
+    from alo.config import load_config
+    from alo.services.obsidian_service import get_alo_folder_path, auto_open_file
+    cfg = load_config()
+    
+    if not cfg.obsidian.enabled:
+        console.print("[yellow]Obsidian integration is disabled.[/yellow]")
+        raise typer.Exit(1)
+        
+    alo_folder = get_alo_folder_path(cfg)
+    if not alo_folder:
+        console.print("[red]Invalid vault path.[/red]")
+        raise typer.Exit(1)
+        
+    if target.lower() == "dashboard":
+        dash_path = alo_folder / "Dashboard.md"
+        if dash_path.exists():
+            console.print("[cyan]Opening Dashboard...[/cyan]")
+            auto_open_file(dash_path, cfg)
+        else:
+            console.print("[yellow]Dashboard.md does not exist yet.[/yellow]")
+            console.print(f"Path: {dash_path}")
+    else:
+        console.print(f"[yellow]Unknown target: {target}[/yellow]")
 
 if __name__ == "__main__":
     app()
