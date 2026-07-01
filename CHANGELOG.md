@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1
+
+Release hygiene patch after the v1.1.0 TestPyPI candidate.
+
+- Preserves user configuration more safely when config files are invalid or partial.
+- Improves Settings trust messages and troubleshooting guidance.
+- Keeps the public CLI command unchanged as `alo`.
+- No new features.
+
 ## v1.1.0
 
 ### Added
