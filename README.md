@@ -204,3 +204,20 @@ Bug reports, docs fixes, UX feedback, and roadmap ideas are welcome.
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+## Troubleshooting / Config
+
+**Where ALO stores config:**
+Configuration is stored securely using your operating system's standard user configuration directory (e.g., ~/.config/ALO/ALO/config.json on Linux, AppData\Local\ALO\ALO\config.json on Windows).
+
+**How to change provider/base URL:**
+Run lo config to update your provider, model, base URL, and key storage preferences. Alternatively, use the interactive dashboard by running lo and navigating to **Settings**.
+
+**How to test API connection:**
+You can test your connection in the TUI (interactive dashboard) by pressing T or selecting "Test API Connection" in the Settings menu.
+
+**What to do if settings look wrong:**
+Your config is preserved safely. If a config file becomes invalid, ALO creates a timestamped backup and uses safe defaults. Open Settings in lo and save again to repair. For partial configurations, ALO will explicitly list the missing required fields (like Base URL).
+
+**API Keys are not printed:**
+ALO never prints or exposes raw API keys in logs, terminal outputs, or config menus. It will only indicate whether a key is configured correctly in the keyring or environment variables.

@@ -90,7 +90,7 @@ def test_invalid_config_backup(monkeypatch, tmp_path):
     res = config.load_config_result()
     assert res.loaded_from == "invalid-fallback"
     assert len(res.warnings) == 1
-    assert "invalid JSON" in res.warnings[0]
+    assert "Your config was preserved" in res.warnings[0]
     
     # Original is preserved
     assert bad_file.read_text(encoding="utf-8") == '{"llm_provider": broken_json_here}'

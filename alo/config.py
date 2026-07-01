@@ -111,7 +111,7 @@ def _load_file(path: Path) -> ConfigLoadResult:
             path=path,
             loaded_from="persisted"
         )
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
         backup_path = path.parent / f"config_broken_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         import shutil
         shutil.copy2(path, backup_path)
@@ -119,9 +119,9 @@ def _load_file(path: Path) -> ConfigLoadResult:
             config=AloConfig(),
             path=path,
             loaded_from="invalid-fallback",
-            warnings=[f"Config file is invalid JSON: {e}. Backup saved to {backup_path.name}."]
+            warnings=[f"Your config was preserved as {backup_path.name}. ALO used safe defaults for this session. Open Settings and save again to repair."]
         )
-    except Exception as e:
+    except Exception:
         backup_path = path.parent / f"config_broken_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         import shutil
         shutil.copy2(path, backup_path)
@@ -129,7 +129,7 @@ def _load_file(path: Path) -> ConfigLoadResult:
             config=AloConfig(),
             path=path,
             loaded_from="invalid-fallback",
-            warnings=[f"Config validation failed: {e}. Backup saved to {backup_path.name}."]
+            warnings=[f"Your config was preserved as {backup_path.name}. ALO used safe defaults for this session. Open Settings and save again to repair."]
         )
 
 def load_config() -> AloConfig:
