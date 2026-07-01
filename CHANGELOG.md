@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.2
+
+Release hygiene patch after the v1.1.1 TestPyPI candidate.
+
+- Clarifies LLM setup vs live connection verification in Settings.
+- Improves safe connection-test diagnostics for authentication, model, timeout, and provider errors.
+- Fixes connection-test result handling to use the correct `ServiceResult.payload` field.
+- Keeps API keys and credentials hidden.
+- No new features.
+
 ## 1.1.1
 
 Release hygiene patch after the v1.1.0 TestPyPI candidate.
